@@ -2,7 +2,7 @@ import vapoursynth as vs
 import fag3kdb
 import kagefunc as kgf
 import fvsfunc as fvf
-import vsTAAmbk as taa
+import vsTAAmbk as vstaa
 
 core = vs.get_core()
 core.max_cache_size = 16384
@@ -19,7 +19,7 @@ resam = core.fmtc.resample(resam, css="444", kernel="lanczos")
 fil = core.knlm.KNLMeansCL(resam, d=1, a=2, h=0.4, channels="YUV", device_type='gpu', device_id=0)
 
 #episode doesnt really have any aliasing but it doesnt hurt and doesnt eat cpu time at all relatively
-taa = taa.TAAmbk(fil,aatype='Nnedi3')
+taa = vstaa.TAAmbk(fil,aatype='Nnedi3')
 
 #flash3kyuu_deband
 #retinex_edgemask merge is used to help preserve details on edges

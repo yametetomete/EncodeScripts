@@ -4,3 +4,7 @@
 *.flac
 *.ffindex
 *.png
+*.aac
+cudnn_data/
+*.webm
+ffmpeg2pass*.log
