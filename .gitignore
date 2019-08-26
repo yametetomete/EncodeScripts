@@ -8,4 +8,4 @@
 cudnn_data/
 *.webm
 ffmpeg2pass*.log
-!07/mask_2.png
+!mask_2.png
