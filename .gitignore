@@ -9,3 +9,5 @@ cudnn_data/
 *.webm
 ffmpeg2pass*.log
 !mask_2.png
+*.m2ts
+*.lwi
