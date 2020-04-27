@@ -77,7 +77,7 @@ bm3d = core.std.ShufflePlanes([w2x, bm3d], planes=[0, 1, 2], colorfamily=vs.YUV)
 denoise_2 = replace_ranges(scaled, bm3d, W2X_DENOISE)
 
 line = kgf.retinex_edgemask(denoise_2).std.Binarize(9500).rgvs.RemoveGrain(3).std.Inflate()
-deband = denoise_2.neo_f3kdb.Deband(range=18, y=32, cb=24, cr=24, grainy=24, grainc=0, output_depth=16, sample_mode=4)
+deband = denoise_2.neo_f3kdb.Deband(range=18, y=32, cb=24, cr=24, grainy=24, grainc=0, output_depth=16, sample_mode=4, keep_tv_range=True)
 deband = core.std.MaskedMerge(deband, denoise_2, line)
 
 # mask OP/ED credits, stolen from varde
