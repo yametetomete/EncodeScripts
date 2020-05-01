@@ -79,7 +79,7 @@ bm3d = core.std.ShufflePlanes([w2x, bm3d], planes=[0, 1, 2], colorfamily=vs.YUV)
 denoise_2 = replace_ranges(scaled, bm3d, W2X_DENOISE)
 
 line = kgf.retinex_edgemask(denoise_2).std.Binarize(9500).rgvs.RemoveGrain(3).std.Inflate()
-nf3kdb = denoise_2.neo_f3kdb.Deband(range=18, y=32, cb=24, cr=24, grainy=24, grainc=0, output_depth=16, sample_mode=4)
+nf3kdb = denoise_2.neo_f3kdb.Deband(range=18, y=32, cb=24, cr=24, grainy=24, grainc=0, output_depth=16, sample_mode=4, keep_tv_range=True)
 nf3kdb = core.std.MaskedMerge(nf3kdb, denoise_2, line)
 placebo = denoise_2.placebo.Deband(iterations=3, threshold=3, radius=24, grain=4)
 placebo2 = denoise_2.placebo.Deband(iterations=3, threshold=5, radius=32, grain=4)
