@@ -5,12 +5,11 @@ import mvsfunc as mvf
 import vardefunc as vrdf
 import vsutil
 
-from ytttfunc.adaptivegrain import adaptive_grain
 from ytttfunc.replace_ranges import replace_ranges
 from functools import partial
 
 core = vs.core
-core.max_cache_size = 1024
+core.max_cache_size = 32768
 
 OP = (744, 3140)
 ED = (31888, 34045)
@@ -23,10 +22,10 @@ W2X_DENOISE = [
 	(OP[0]+1859, OP[0]+1896) # flashy OP scene
 ]
 
-src_ep = core.lsmas.LWLibavSource("bdmv/KIXA_90889/BDMV/STREAM/00003.m2ts")
-src_pv = core.lsmas.LWLibavSource("bdmv/KIXA_90889/BDMV/STREAM/00004.m2ts")[:-24]
-src_ncop = core.lsmas.LWLibavSource("../bd2/bdmv/KIXA_90889/BDMV/STREAM/00007.m2ts")[24:-24]
-src_nced = core.lsmas.LWLibavSource("../bd2/bdmv/KIXA_90889/BDMV/STREAM/00008.m2ts")[24:-24]
+src_ep = core.lsmas.LWLibavSource("../bd2/KIXA_90889/BDMV/STREAM/00003.m2ts")
+src_pv = core.lsmas.LWLibavSource("../bd2/KIXA_90889/BDMV/STREAM/00004.m2ts")[:-24]
+src_ncop = core.lsmas.LWLibavSource("../bd2/KIXA_90889/BDMV/STREAM/00007.m2ts")[24:-24]
+src_nced = core.lsmas.LWLibavSource("../bd2/KIXA_90889/BDMV/STREAM/00008.m2ts")[24:-24]
 src = src_ep + src_pv
 src = src.fmtc.bitdepth(bits=16)
 
@@ -34,7 +33,7 @@ denoisechroma = core.knlm.KNLMeansCL(src, d=1, a=2, h=0.45, channels="UV", devic
 denoiseluma = core.knlm.KNLMeansCL(src, d=3, a=2, h=0.4, channels="Y", device_type='gpu', device_id=0)
 denoise = core.std.ShufflePlanes([denoiseluma, denoisechroma], planes=[0, 1, 2], colorfamily=vs.YUV)
 
-logo_mask = core.imwri.Read("mask_2.png")
+logo_mask = core.imwri.Read("../common/mask_2.png")
 logo_mask = logo_mask.resize.Bilinear(format=src.format.id, matrix_s="709")
 
 Y = vsutil.get_y(denoise)
@@ -81,12 +80,12 @@ deband = denoise_2.neo_f3kdb.Deband(range=18, y=32, cb=24, cr=24, grainy=24, gra
 deband = core.std.MaskedMerge(deband, denoise_2, line)
 
 # mask OP/ED credits, stolen from varde
-credit_op_m = vrdf.DCM(deband, src[OP[0]:OP[1]+1], src_ncop[:OP[1]-OP[0]+1], OP[0], OP[1], 2, 2)
-credit_ed_m = vrdf.DCM(deband, src[ED[0]:ED[1]+1], src_nced[:ED[1]-ED[0]+1], ED[0], ED[1], 2, 2)
+credit_op_m = vrdf.dcm(deband, src[OP[0]:OP[1]+1], src_ncop[:OP[1]-OP[0]+1], OP[0], OP[1], 2, 2)
+credit_ed_m = vrdf.dcm(deband, src[ED[0]:ED[1]+1], src_nced[:ED[1]-ED[0]+1], ED[0], ED[1], 2, 2)
 credit_m = core.std.Expr([credit_op_m, credit_ed_m], 'x y +')
 credit = core.std.MaskedMerge(deband, denoise, credit_m)
 
 final = credit
-final = adaptive_grain(final, 0.3)
+final = kgf.adaptive_grain(final, 0.3)
 final = core.fmtc.bitdepth(final, bits=10, dmode=3)
 final.set_output()
