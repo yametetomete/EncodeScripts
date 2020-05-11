@@ -3,7 +3,7 @@ import vapoursynth as vs
 import sys
 sys.path.append("..")
 
-from common import FadeRange, denoise, descale, w2x, deband, ncop_mask, finalize
+from xv_common import FadeRange, denoise, descale, w2x, deband, ncop_mask, finalize
 from functools import partial
 from toolz.functoolz import compose
 
