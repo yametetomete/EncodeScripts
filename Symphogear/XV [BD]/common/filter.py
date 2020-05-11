@@ -32,7 +32,7 @@ def w2x(clip: vs.VideoNode, w2x_range: List[Union[int, Tuple[int, int]]]
 
 
 def deband(clip: vs.VideoNode, hard: List[Union[int, Tuple[int, int]]],
-           harder: List[Union[int, Tuple[int, int]]]):
+           harder: List[Union[int, Tuple[int, int]]]) -> vs.VideoNode:
     line = retinex_edgemask(clip).std.Binarize(9500).rgvs.RemoveGrain(3) \
         .std.Inflate()
     nf3kdb = clip.neo_f3kdb.Deband(range=18, y=32, cb=24, cr=24, grainy=24,
@@ -42,9 +42,9 @@ def deband(clip: vs.VideoNode, hard: List[Union[int, Tuple[int, int]]],
                                   grain=4)
     placebo2 = clip.placebo.Deband(iterations=3, threshold=5, radius=32,
                                    grain=4)
-    deband = replace_ranges(nf3kdb, placebo, hard)
-    deband = replace_ranges(deband, placebo2, harder)
-    return deband
+    debanded = replace_ranges(nf3kdb, placebo, hard)
+    debanded = replace_ranges(debanded, placebo2, harder)
+    return debanded
 
 
 def ncop_mask(clip: vs.VideoNode, src: vs.VideoNode,
