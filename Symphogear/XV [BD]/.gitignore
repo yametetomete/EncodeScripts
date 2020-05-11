@@ -1,0 +1,12 @@
+.mypy_cache/
+bdmv/
+common/__pycache__/
+*.bookmarks
+*.png
+!common/mask_2.png
+*.swp
+*.mkv
+*.mp4
+*.wav
+*.flac
+*.mka
