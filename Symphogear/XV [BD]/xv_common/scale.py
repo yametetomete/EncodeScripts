@@ -7,7 +7,10 @@ from lvsfunc.aa import upscaled_sraa
 from lvsfunc.kernels import Bicubic
 from lvsfunc.misc import replace_ranges
 from lvsfunc.scale import descale as ldescale
-from typing import List, NamedTuple, Tuple, Union
+from toolz.functoolz import curry
+from typing import List, NamedTuple, Tuple
+
+from .filter import Range
 
 core = vs.core
 
@@ -58,10 +61,10 @@ def _really_dumb_inverse_mask(clip: vs.VideoNode, reupscaled: vs.VideoNode,
     return mask.resize.Bicubic(format=clip.format.id)
 
 
-def descale(clip: vs.VideoNode, force_scale: List[Union[int, Tuple[int, int]]],
-            no_scale: List[Union[int, Tuple[int, int]]],
-            fade_ranges: List[FadeRange], show_mask: bool = False
-            ) -> vs.VideoNode:
+@curry
+def descale(clip: vs.VideoNode, force_scale: List[Range],
+            no_scale: List[Range], fade_ranges: List[FadeRange],
+            show_mask: bool = False) -> vs.VideoNode:
     dmask = partial(_really_dumb_inverse_mask, ranges=fade_ranges)
     kernel = Bicubic(b=1/3, c=1/3)
     heights = [871, 872, 873]

@@ -1,12 +1,16 @@
 import vapoursynth as vs
+import vsutil
 
 from kagefunc import adaptive_grain, retinex_edgemask
 from lvsfunc.misc import replace_ranges
 from mvsfunc import BM3D
+from toolz.functoolz import curry
 from typing import List, Tuple, Union
 from vardefunc import dcm
 
 core = vs.core
+
+Range = Union[int, Tuple[int, int]]
 
 
 def denoise(clip: vs.VideoNode) -> vs.VideoNode:
@@ -18,8 +22,8 @@ def denoise(clip: vs.VideoNode) -> vs.VideoNode:
                                   planes=[0, 1, 2], colorfamily=vs.YUV)
 
 
-def w2x(clip: vs.VideoNode, w2x_range: List[Union[int, Tuple[int, int]]]
-        ) -> vs.VideoNode:
+@curry
+def w2x(clip: vs.VideoNode, w2x_range: List[Range]) -> vs.VideoNode:
     rgb = clip.resize.Point(format=vs.RGBS, matrix_in_s="709")
     w2x = rgb.w2xnvk.Waifu2x(noise=1, scale=1, model=2) \
         .resize.Point(format=clip.format.id, matrix_s="709")
@@ -31,8 +35,9 @@ def w2x(clip: vs.VideoNode, w2x_range: List[Union[int, Tuple[int, int]]]
     return denoise
 
 
-def deband(clip: vs.VideoNode, hard: List[Union[int, Tuple[int, int]]],
-           harder: List[Union[int, Tuple[int, int]]]) -> vs.VideoNode:
+@curry
+def deband(clip: vs.VideoNode, hard: List[Range],
+           harder: List[Range]) -> vs.VideoNode:
     line = retinex_edgemask(clip).std.Binarize(9500).rgvs.RemoveGrain(3) \
         .std.Inflate()
     nf3kdb = clip.neo_f3kdb.Deband(range=18, y=32, cb=24, cr=24, grainy=24,
@@ -47,7 +52,8 @@ def deband(clip: vs.VideoNode, hard: List[Union[int, Tuple[int, int]]],
     return debanded
 
 
-def ncop_mask(clip: vs.VideoNode, src: vs.VideoNode,
+@curry
+def mask_oped(clip: vs.VideoNode, src: vs.VideoNode,
               op: Tuple[int, int], ed: Tuple[int, int], src_op: vs.VideoNode,
               src_ed: vs.VideoNode) -> vs.VideoNode:
     credit_op_m = dcm(clip, src[op[0]:op[1]+1],
@@ -56,6 +62,16 @@ def ncop_mask(clip: vs.VideoNode, src: vs.VideoNode,
                       src_ed[:ed[1]-ed[0]+1], ed[0], ed[1], 2, 2)
     credit_m = core.std.Expr([credit_op_m, credit_ed_m], 'x y +')
     return core.std.MaskedMerge(clip, src, credit_m)
+
+
+@curry
+def mask_logo(clip: vs.VideoNode, src: vs.VideoNode, src_logo: vs.VideoNode,
+              range: Range) -> vs.VideoNode:
+    mask = vsutil.get_y(src_logo).std.Binarize(19).fmtc.bitdepth(bits=16)
+    mask = vsutil.iterate(mask, core.std.Inflate, 5)
+    merge = core.std.MaskedMerge(clip, src, mask)
+    merge = replace_ranges(clip, merge, [range])
+    return merge
 
 
 def finalize(clip: vs.VideoNode) -> vs.VideoNode:
