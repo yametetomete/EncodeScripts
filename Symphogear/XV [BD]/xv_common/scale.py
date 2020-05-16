@@ -6,6 +6,7 @@ from lvsfunc.aa import upscaled_sraa
 from lvsfunc.kernels import Bicubic
 from lvsfunc.misc import replace_ranges
 from lvsfunc.scale import descale as ldescale
+from lvsfunc.scale import descale_detail_mask
 from toolz.functoolz import curry
 from typing import List, NamedTuple, Tuple
 
@@ -43,10 +44,8 @@ def _fade_ranges_with_refs(clip: vs.VideoNode, reupscaled: vs.VideoNode,
                            ranges: List[FadeRange]) -> vs.VideoNode:
     mask = core.std.BlankClip(clip)
     for r in ranges:
-        rmask = core.std.Expr([clip[r.ref], reupscaled[r.ref]], "x y - abs")
-        rmask = rmask.std.Binarize(1500)
-        rmask = vsutil.iterate(rmask, core.std.Maximum, 4)
-        rmask = vsutil.iterate(rmask, core.std.Inflate, 2)
+        rmask = descale_detail_mask(clip[r.ref], reupscaled[r.ref],
+                                    threshold=1500)
         rmask = core.std.Expr([mask, rmask], "x y +")
         mask = replace_ranges(mask, rmask, [r.range_])
 
@@ -55,30 +54,39 @@ def _fade_ranges_with_refs(clip: vs.VideoNode, reupscaled: vs.VideoNode,
 
 @curry
 def _inverse_mask(clip: vs.VideoNode, reupscaled: vs.VideoNode,
-                  ranges: List[FadeRange] = []) -> vs.VideoNode:
+                  franges: List[FadeRange] = [], dranges: List[Range] = []
+                  ) -> vs.VideoNode:
     reupscaled = reupscaled.resize.Bicubic(format=clip.format.id)
     line_mask = retinex_edgemask(clip, 0.0001).std.Binarize(10000)
-    fade_mask = _fade_ranges_with_refs(clip, reupscaled, ranges)
+    fade_mask = _fade_ranges_with_refs(clip, reupscaled, franges)
     mask = core.std.Expr([fade_mask, line_mask.std.Invert()], "x y +")
+    if dranges:
+        detail_mask = descale_detail_mask(clip, reupscaled, threshold=1500)
+        mask_with_detail = core.std.Expr([mask, detail_mask], "x y +")
+        mask = replace_ranges(mask, mask_with_detail, dranges)
     return mask.resize.Bicubic(format=clip.format.id)
 
 
 @curry
-def descale(clip: vs.VideoNode, force_scale: List[Range],
-            no_scale: List[Range], fade_ranges: List[FadeRange],
-            show_mask: bool = False) -> vs.VideoNode:
+def descale(clip: vs.VideoNode, force_scale: List[Range] = [],
+            no_scale: List[Range] = [], fade_ranges: List[FadeRange] = [],
+            detail_ranges: List[Range] = [], show_mask: bool = False
+            ) -> vs.VideoNode:
     kernel = Bicubic(b=1/3, c=1/3)
     heights = [871, 872, 873]
     y = vsutil.get_y(clip)
     ys = ldescale(y, upscaler=_sraa_reupscale, height=heights,
                   kernel=kernel, threshold=0.003,
-                  mask=_inverse_mask(ranges=fade_ranges), show_mask=show_mask)
+                  mask=_inverse_mask(franges=fade_ranges,
+                                     dranges=detail_ranges),
+                  show_mask=show_mask)
     if show_mask:
         return ys
 
     yf = ldescale(y, upscaler=_sraa_reupscale, height=heights,
                   kernel=kernel, threshold=0,
-                  mask=_inverse_mask(ranges=fade_ranges))
+                  mask=_inverse_mask(franges=fade_ranges,
+                                     dranges=detail_ranges))
     yd = replace_ranges(ys, yf, force_scale)
     scaled = core.std.ShufflePlanes([yd, clip], planes=[0, 1, 2],
                                     colorfamily=vs.YUV)
@@ -87,7 +95,7 @@ def descale(clip: vs.VideoNode, force_scale: List[Range],
 
 
 @curry
-def descale720(clip: vs.VideoNode, src: vs.VideoNode, ranges: List[Range]
+def descale720(clip: vs.VideoNode, src: vs.VideoNode, ranges: List[Range] = []
                ) -> vs.VideoNode:
     y = ldescale(vsutil.get_y(src), upscaler=_sraa_reupscale, height=720,
                  kernel=Bicubic(b=1/3, c=1/3), threshold=0, mask=_inverse_mask)

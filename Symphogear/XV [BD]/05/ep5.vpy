@@ -1,7 +1,7 @@
 import vapoursynth as vs
 
 from toolz.functoolz import compose
-from typing import List
+from typing import List, Optional, Tuple
 
 import sys
 sys.path.append("..")
@@ -12,17 +12,21 @@ from xv_common import (FadeRange, Range, denoise, descale, w2x, deband,
 core = vs.core
 core.max_cache_size = 1024
 
-OP = (1272, 3668)
-ED = (31889, 34046)
+OP: Optional[Tuple[int, int]] = (1272, 3668)
+ED: Optional[Tuple[int, int]] = (31889, 34046)
 LOGO: Range = (17300, 17436)
 NO_SCALE: List[Range] = [(34514, 34600)]
 FORCE_SCALE: List[Range] = [(22384, 23376)]
 FADE_RANGES: List[FadeRange] = [
     FadeRange(ref=3700, range_=(3670, 3751)),  # title
 ]
-W2X_DENOISE: List[Range] = [
-    (OP[0]+1859, OP[0]+1896)  # flashy OP scene
-]
+
+W2X_DENOISE: List[Range] = []
+if OP is not None:
+    W2X_DENOISE.append(
+        (OP[0]+1859, OP[0]+1896),  # flashy OP scene
+    )
+
 DEBAND_HARD: List[Range] = []
 DEBAND_HARDER: List[Range] = []
 
