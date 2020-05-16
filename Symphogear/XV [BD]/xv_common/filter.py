@@ -5,7 +5,7 @@ from kagefunc import adaptive_grain, retinex_edgemask
 from lvsfunc.misc import replace_ranges
 from mvsfunc import BM3D
 from toolz.functoolz import curry
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 from vardefunc import dcm
 
 core = vs.core
@@ -54,14 +54,18 @@ def deband(clip: vs.VideoNode, hard: List[Range],
 
 @curry
 def mask_oped(clip: vs.VideoNode, src: vs.VideoNode,
-              op: Tuple[int, int], ed: Tuple[int, int], src_op: vs.VideoNode,
-              src_ed: vs.VideoNode) -> vs.VideoNode:
-    credit_op_m = dcm(clip, src[op[0]:op[1]+1],
-                      src_op[:op[1]-op[0]+1], op[0], op[1], 2, 2)
-    credit_ed_m = dcm(clip, src[ed[0]:ed[1]+1],
-                      src_ed[:ed[1]-ed[0]+1], ed[0], ed[1], 2, 2)
-    credit_m = core.std.Expr([credit_op_m, credit_ed_m], 'x y +')
-    return core.std.MaskedMerge(clip, src, credit_m)
+              op: Optional[Tuple[int, int]], ed: Optional[Tuple[int, int]],
+              src_op: vs.VideoNode, src_ed: vs.VideoNode) -> vs.VideoNode:
+    merge = clip
+    if op is not None:
+        credit_op_m = dcm(clip, src[op[0]:op[1]+1],
+                          src_op[:op[1]-op[0]+1], op[0], op[1], 2, 2)
+        merge = core.std.MaskedMerge(merge, src, credit_op_m)
+    if ed is not None:
+        credit_ed_m = dcm(clip, src[ed[0]:ed[1]+1],
+                          src_ed[:ed[1]-ed[0]+1], ed[0], ed[1], 2, 2)
+        merge = core.std.MaskedMerge(merge, src, credit_ed_m)
+    return merge
 
 
 @curry
