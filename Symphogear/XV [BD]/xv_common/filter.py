@@ -24,9 +24,9 @@ def denoise(clip: vs.VideoNode) -> vs.VideoNode:
 
 @curry
 def w2x(clip: vs.VideoNode, w2x_range: List[Range]) -> vs.VideoNode:
-    rgb = clip.resize.Point(format=vs.RGBS, matrix_in_s="709")
+    rgb = clip.resize.Bicubic(format=vs.RGBS, matrix_in_s="709")
     w2x = rgb.w2xnvk.Waifu2x(noise=1, scale=1, model=2) \
-        .resize.Point(format=clip.format.id, matrix_s="709")
+        .resize.Bicubic(format=clip.format.id, matrix_s="709")
 
     bm3d = BM3D(clip, sigma=[0, 5], ref=w2x)
     bm3d = core.std.ShufflePlanes([w2x, bm3d], planes=[0, 1, 2],

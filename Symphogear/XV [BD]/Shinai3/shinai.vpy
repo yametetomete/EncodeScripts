@@ -1,9 +1,6 @@
-import os
-
 import vapoursynth as vs
 import kagefunc as kgf
 import fvsfunc as fvf
-import vsTAAmbk as vstaa
 import vsutil
 from nnedi3_rpow2 import nnedi3_rpow2
 
@@ -11,9 +8,8 @@ from ytttfunc import adaptivegrain
 
 
 core = vs.core
-core.max_cache_size = 1024
 
-src = core.lsmas.LWLibavSource("KIXA_90892/BDMV/STREAM/00007.m2ts")[24:-24]
+src = core.lsmas.LWLibavSource("../bdmv/KIXA_90892/BDMV/STREAM/00007.m2ts")[24:-24]
 src = core.fmtc.bitdepth(src, bits=16)
 
 Y = vsutil.get_y(src)
