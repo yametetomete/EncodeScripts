@@ -5,6 +5,8 @@
 *.ffindex
 *.png
 *.aac
+*.m4a
+*.h265
 cudnn_data/
 *.webm
 ffmpeg2pass*.log
@@ -12,3 +14,5 @@ ffmpeg2pass*.log
 *.m2ts
 *.lwi
 **/.vspreview/
+**/results/
+**/__pycache__/
