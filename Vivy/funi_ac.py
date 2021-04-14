@@ -19,7 +19,7 @@ src = core.ffms2.Source(funi)
 
 if __name__ == "__main__":
     funi_audio: str = f"{EPNUM:02d}/funi.aac"
-    if not os.path.exists(funi_audio):
+    if not os.path.isfile(funi_audio):
         call(["ffmpeg",
               "-i", funi,
               "-vn",
@@ -29,4 +29,4 @@ if __name__ == "__main__":
               funi_audio],
              stdout=DEVNULL, stderr=DEVNULL
              )
-    ac.eztrim(src, (FUNI_INTRO, 0), funi_audio, f"{EPNUM:02d}/{EPNUM:02d}_cut.aac")
+    ac.eztrim(src, (FUNI_INTRO, 0), funi_audio, f"{EPNUM:02d}/{EPNUM:02d}_cut.mka")
