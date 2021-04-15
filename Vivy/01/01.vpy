@@ -14,13 +14,13 @@ core = vs.core
 
 EPNUM: int = int(os.path.basename(os.path.splitext(__file__)[0]))
 SIGNS_RU: List[HardsubSign] = [
-    HardsubSign((5283, 5403), ((226, 786), (1214, 102))),
-    HardsubSign((6778, 6888), ((588, 454), (434, 63))),
-    HardsubSign((9017, 9070), ((975, 301), (157, 24))),
-    HardsubSign((22276, 22350), ((480, 75), (959, 66))),
-    HardsubSign((25715, 25904), ((623, 73), (681, 67))),
-    HardsubSign((35223, 36108), ((775, 866), (1138, 211))),
-    HardsubSign((37572, 37666), ((259, 856), (987, 103))),
+    HardsubSign((5283, 5403), ((226, 786), (1214, 102)), highpass=2000),
+    HardsubSign((6778, 6888), ((588, 454), (434, 63)), highpass=2000),
+    HardsubSign((9017, 9070), ((975, 301), (157, 24)), highpass=2000),
+    HardsubSign((22276, 22350), ((480, 75), (959, 66)), highpass=2000),
+    HardsubSign((25715, 25904), ((623, 73), (681, 67)), highpass=2000),
+    HardsubSign((35223, 36108), ((775, 866), (1138, 211)), highpass=2000),
+    HardsubSign((37572, 37666), ((259, 856), (987, 103)), highpass=2000),
 ]
 CREDITS: List[Range] = [(35151, 37306)]
 PIXELSHIT: List[Range] = [
