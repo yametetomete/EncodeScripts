@@ -33,14 +33,16 @@ class HardsubSign():
     bound: Optional[BoundingBox]
     refframe: Optional[int]
     highpass: int
+    expand: int
 
     def __init__(self,
                  range: Range,
                  bound: Union[BoundingBox, Tuple[Tuple[int, int], Tuple[int, int]], None],
-                 refframe: Optional[int] = None, highpass: int = 5000):
+                 refframe: Optional[int] = None, highpass: int = 5000, expand: int = 8):
         self.range = range
         self.refframe = refframe
         self.highpass = highpass
+        self.expand = expand
         if bound is None:
             self.bound = None
         elif isinstance(bound, BoundingBox):
@@ -50,9 +52,10 @@ class HardsubSign():
 
     def _hardsub_mask(self, hrdsb: vs.VideoNode, ref: vs.VideoNode) -> vs.VideoNode:
         if self.refframe is not None:
-            mask = kgf.hardsubmask_fades(hrdsb[self.refframe], ref[self.refframe], highpass=self.highpass)
+            mask = kgf.hardsubmask_fades(hrdsb[self.refframe], ref[self.refframe],
+                                         highpass=self.highpass, expand_n=self.expand)
         else:
-            mask = kgf.hardsubmask_fades(hrdsb, ref, highpass=self.highpass)
+            mask = kgf.hardsubmask_fades(hrdsb, ref, highpass=self.highpass, expand_n=self.expand)
 
         assert isinstance(mask, vs.VideoNode)
         return mask
