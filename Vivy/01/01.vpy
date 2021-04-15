@@ -7,7 +7,7 @@ import sys
 sys.path.append("..")
 
 from vivy_common import (HardsubSign, Range, bounded_dehardsub, antialias, deband, denoise,  # noqa: E402
-                         finalize, fsrcnnx_rescale, source)
+                         finalize, fsrcnnx_rescale, letterbox_edgefix, source)
 
 core = vs.core
 
@@ -33,14 +33,18 @@ PIXELSHIT: List[Range] = [
 ]
 NOSCALE: List[Range] = CREDITS + PIXELSHIT
 NOAA: List[Range] = PIXELSHIT
+LETTERBOX: List[Range] = [
+    (659, 14071)
+]
 
-waka, funi = source(EPNUM)
+waka, ref = source(EPNUM)
 waka = waka[:37301] + core.std.BlankClip(waka, length=6) + waka[37301:]
 
-src = bounded_dehardsub(waka, funi, SIGNS_RU)
+src = bounded_dehardsub(waka, ref, SIGNS_RU)
 rescale = fsrcnnx_rescale(src, NOSCALE)
 den = denoise(rescale)
 deb = deband(den)
 aa = antialias(deb, NOAA)
-final = finalize(aa)
+edgefix = letterbox_edgefix(aa, LETTERBOX)
+final = finalize(edgefix)
 final.set_output()

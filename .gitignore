@@ -7,6 +7,7 @@
 *.aac
 *.m4a
 *.h265
+*.eac3
 cudnn_data/
 *.webm
 ffmpeg2pass*.log

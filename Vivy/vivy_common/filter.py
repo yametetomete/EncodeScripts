@@ -3,6 +3,7 @@ import kagefunc as kgf
 import lvsfunc as lvf
 import vardefunc as vdf
 
+from awsmfunc import bbmod
 from mvsfunc import BM3D
 from typing import List, Optional
 
@@ -29,6 +30,11 @@ def fsrcnnx_rescale(src: vs.VideoNode, noscale: Optional[List[Range]] = None) ->
     return lvf.misc.replace_ranges(descale, src, noscale) if noscale else descale
 
 
+def letterbox_edgefix(clip: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
+    edgefix = bbmod(clip.std.Crop(top=132, bottom=132), top=2, bottom=2, blur=500).std.AddBorders(top=132, bottom=132)
+    return lvf.misc.replace_ranges(clip, edgefix, ranges)
+
+
 def denoise(clip: vs.VideoNode) -> vs.VideoNode:
     bm3d = BM3D(clip, sigma=[1.5, 0], depth=16)
     knl = core.knlm.KNLMeansCL(clip, d=3, a=2, h=0.4, channels="UV", device_type='gpu', device_id=0)
@@ -36,7 +42,7 @@ def denoise(clip: vs.VideoNode) -> vs.VideoNode:
 
 
 def deband(clip: vs.VideoNode) -> vs.VideoNode:
-    return clip.neo_f3kdb.Deband(range=18, y=32, cb=24, cr=24, grainy=24, grainc=0, output_depth=16, sample_mode=4)
+    return vdf.dumb3kdb(clip, radius=18, threshold=36, grain=[24, 0])
 
 
 def antialias(clip: vs.VideoNode, noaa: Optional[List[Range]] = None) -> vs.VideoNode:

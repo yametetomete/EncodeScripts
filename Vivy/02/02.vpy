@@ -45,10 +45,10 @@ PIXELSHIT: List[Range] = [
 NOSCALE: List[Range] = CREDITS + PIXELSHIT
 NOAA: List[Range] = PIXELSHIT
 
-waka, funi = source(EPNUM)
+waka, ref = source(EPNUM)
 waka = waka[:32344] + waka[32349:]
 
-src = bounded_dehardsub(waka, funi, SIGNS_RU)
+src = bounded_dehardsub(waka, ref, SIGNS_RU)
 rescale = fsrcnnx_rescale(src, NOSCALE)
 den = denoise(rescale)
 deb = deband(den)
