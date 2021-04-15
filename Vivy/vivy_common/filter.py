@@ -42,7 +42,9 @@ def denoise(clip: vs.VideoNode) -> vs.VideoNode:
 
 
 def deband(clip: vs.VideoNode) -> vs.VideoNode:
-    return vdf.dumb3kdb(clip, radius=18, threshold=36, grain=[24, 0])
+    deb = vdf.dumb3kdb(clip, radius=18, threshold=36, grain=[24, 0])
+    assert isinstance(deb, vs.VideoNode)
+    return deb
 
 
 def antialias(clip: vs.VideoNode, noaa: Optional[List[Range]] = None) -> vs.VideoNode:
