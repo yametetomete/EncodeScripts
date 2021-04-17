@@ -81,7 +81,7 @@ def get_all_masks(hrdsb: vs.VideoNode, ref: vs.VideoNode, signs: List[HardsubSig
     Scenefiltering helper, not used in encode
     """
     assert ref.format is not None
-    mask = core.std.BlankClip(ref, format=ref.format.replace(color_family=vs.GRAY, subsampling_w=0, subsampling_h=0))
+    mask = core.std.BlankClip(ref, format=ref.format.replace(color_family=vs.GRAY, subsampling_w=0, subsampling_h=0).id)
     for sign in signs:
         mask = lvf.misc.replace_ranges(mask, core.std.Expr([mask, sign.get_mask(hrdsb, ref)], 'x y +'), [sign.range])
     return mask

@@ -6,7 +6,7 @@ import os
 import sys
 sys.path.append("..")
 
-from vivy_common import (HardsubSign, Range, bounded_dehardsub, antialias, deband, denoise,  # noqa: E402
+from vivy_common import (HardsubSign, Range, SelfRunner, bounded_dehardsub, antialias, deband, denoise,  # noqa: E402
                          finalize, fsrcnnx_rescale, letterbox_edgefix, source)
 
 core = vs.core
@@ -31,13 +31,26 @@ NOSCALE: List[Range] = []
 NOAA: List[Range] = []
 LETTERBOX: List[Range] = [(0, 432)]
 
-waka, ref = source(EPNUM)
 
-src = bounded_dehardsub(waka, ref, SIGNS_RU)
-rescale = fsrcnnx_rescale(src, NOSCALE)
-den = denoise(rescale)
-deb = deband(den)
-aa = antialias(deb, NOAA)
-edgefix = letterbox_edgefix(aa, LETTERBOX)
-final = finalize(edgefix)
-final.set_output()
+def filter_basic() -> vs.VideoNode:
+    waka, ref = source(EPNUM)
+    src = bounded_dehardsub(waka, ref, SIGNS_RU)
+    return src
+
+
+def filter() -> vs.VideoNode:
+    src = filter_basic()
+    rescale = fsrcnnx_rescale(src, NOSCALE)
+    den = denoise(rescale)
+    deb = deband(den)
+    aa = antialias(deb, NOAA)
+    edgefix = letterbox_edgefix(aa, LETTERBOX)
+    final = finalize(edgefix)
+    final.set_output()
+    return final
+
+
+if __name__ == "__main__":
+    SelfRunner(EPNUM, filter, filter_basic)
+else:
+    filter()
