@@ -6,8 +6,12 @@
 *.png
 *.aac
 *.m4a
+*.h264
 *.h265
 *.eac3
+*.ass
+*.mka
+*.xml
 cudnn_data/
 *.webm
 ffmpeg2pass*.log

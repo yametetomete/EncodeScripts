@@ -184,13 +184,16 @@ class AudioGetter():
             print(f"{SUCCESS}Found Amazon audio{RESET}")
             return
 
+        # as of Ep4 SubsPlease is using new funi 128kbps aac while erai has 256kbps still
         try:
+            if os.path.isfile(ER_FILENAME.format(epnum=epnum)):
+                self.audio_file = ER_FILENAME.format(epnum=epnum)
+                self.video_src = core.ffms2.Source(ER_FILENAME.format(epnum=epnum))
             if os.path.isfile(glob_crc(SUBSPLS_FILENAME.format(epnum=epnum))):
                 self.audio_file = glob_crc(SUBSPLS_FILENAME.format(epnum=epnum))
                 self.video_src = core.ffms2.Source(glob_crc(SUBSPLS_FILENAME.format(epnum=epnum)))
-            elif os.path.isfile(ER_FILENAME.format(epnum=epnum)):
-                self.audio_file = ER_FILENAME.format(epnum=epnum)
-                self.video_src = core.ffms2.Source(ER_FILENAME.format(epnum=epnum))
+                if (epnum >= 4):
+                    print(f"{WARNING}Using SubsPlease, audio may be worse than Erai-Raws{RESET}")
             else:
                 raise FileNotFoundError()
         except FileNotFoundError:
@@ -305,7 +308,8 @@ class SelfRunner():
 
         try:
             print(f"{STATUS}--- MUXING FILE ---{RESET}")
-            if self._mux(f"{TITLE.lower()}_{epnum:02d}_{args.suffix}.mkv", not args.no_metadata) != 0:
+            if self._mux(f"{TITLE.lower()}_{epnum:02d}_{args.suffix}.mkv", not args.no_metadata,
+                         not args.no_metadata and start == 0 and end == self.clip.num_frames) != 0:
                 raise Exception("mkvmerge failed")
         except Exception:
             print(f"{ERROR}--- MUXING FAILED ---{RESET}")
@@ -321,7 +325,7 @@ class SelfRunner():
 
         print(f"{SUCCESS}--- ENCODE COMPLETE ---{RESET}")
 
-    def _mux(self, name: str, metadata: bool = True) -> int:
+    def _mux(self, name: str, metadata: bool = True, chapters: bool = True) -> int:
         mkvtoolnix_args = [
             "mkvmerge",
             "--output", name,
@@ -337,10 +341,12 @@ class SelfRunner():
             mkvtoolnix_args += [
                 "--title", f"[{SUBGROUP}] {TITLE_LONG} - {self.epnum:02d}",
             ]
-            chapters = [f for f in ["{self.epnum:02d}.xml", "chapters.xml"] if os.path.isfile(f)]
-            if len(chapters) != 0:
+
+        if chapters:
+            chap = [f for f in ["{self.epnum:02d}.xml", "chapters.xml"] if os.path.isfile(f)]
+            if len(chap) != 0:
                 mkvtoolnix_args += [
-                    "--chapters", chapters[0],
+                    "--chapters", chap[0],
                 ]
 
         print("+ " + " ".join(mkvtoolnix_args))
