@@ -14,8 +14,6 @@ from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Tuple, Uni
 
 core = vs.core
 
-Range = Union[int, Tuple[int, int]]
-
 TITLE: str = "Vivy"
 TITLE_LONG: str = f"{TITLE} - Fluorite Eye's Song"
 RESOLUTION: int = 1080

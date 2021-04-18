@@ -4,10 +4,9 @@ import lvsfunc as lvf
 import vardefunc as vdf
 
 from awsmfunc import bbmod
+from lvsfunc.types import Range
 from mvsfunc import BM3D
 from typing import List, Optional
-
-from .util import Range
 
 import os
 import vsutil

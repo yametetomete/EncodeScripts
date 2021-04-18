@@ -1,13 +1,16 @@
 import vapoursynth as vs
 
+from lvsfunc.types import Range
+from lvsfunc.dehardsub import HardsubSign, bounded_dehardsub
+
 from typing import List
 
 import os
 import sys
 sys.path.append("..")
 
-from vivy_common import (HardsubSign, Range, bounded_dehardsub, antialias, deband, denoise,  # noqa: E402
-                         finalize, fsrcnnx_rescale, source)
+from vivy_common import (SelfRunner, antialias, deband, denoise, finalize,  # noqa: E402
+                         fsrcnnx_rescale, source)
 
 core = vs.core
 
@@ -45,13 +48,26 @@ PIXELSHIT: List[Range] = [
 NOSCALE: List[Range] = CREDITS + PIXELSHIT
 NOAA: List[Range] = PIXELSHIT
 
-waka, ref = source(EPNUM)
-waka = waka[:32344] + waka[32349:]
 
-src = bounded_dehardsub(waka, ref, SIGNS_RU)
-rescale = fsrcnnx_rescale(src, NOSCALE)
-den = denoise(rescale)
-deb = deband(den)
-aa = antialias(deb, NOAA)
-final = finalize(aa)
-final.set_output()
+def filter_basic() -> vs.VideoNode:
+    waka, ref = source(EPNUM)
+    waka = waka[:32344] + waka[32349:]
+    src = bounded_dehardsub(waka, ref, SIGNS_RU)
+    return src
+
+
+def filter() -> vs.VideoNode:
+    src = filter_basic()
+    rescale = fsrcnnx_rescale(src, NOSCALE)
+    den = denoise(rescale)
+    deb = deband(den)
+    aa = antialias(deb, NOAA)
+    final = finalize(aa)
+    final.set_output()
+    return final
+
+
+if __name__ == "__main__":
+    SelfRunner(EPNUM, filter, filter_basic)
+else:
+    filter()

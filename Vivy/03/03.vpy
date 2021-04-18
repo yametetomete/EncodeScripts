@@ -1,12 +1,15 @@
 import vapoursynth as vs
 
+from lvsfunc.types import Range
+from lvsfunc.dehardsub import HardsubSign, bounded_dehardsub
+
 from typing import List
 
 import os
 import sys
 sys.path.append("..")
 
-from vivy_common import (HardsubSign, Range, SelfRunner, bounded_dehardsub, antialias, deband, denoise,  # noqa: E402
+from vivy_common import (SelfRunner, antialias, deband, denoise,  # noqa: E402
                          finalize, fsrcnnx_rescale, letterbox_edgefix, source)
 
 core = vs.core
