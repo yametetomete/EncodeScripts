@@ -4,7 +4,6 @@ class Config():
     title_long: str
     resolution: int
     datapath: str
-    subgroup: str
 
     def __init__(self, epnum: int, title: str, title_long: str, resolution: int, datapath: str) -> None:
         self.epnum = epnum

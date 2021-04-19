@@ -1,8 +1,10 @@
 import vapoursynth as vs
 
+from yt_common.automation import SelfRunner
+from yt_common.source import waka_replace
+
 from lvsfunc.types import Range
 from lvsfunc.dehardsub import HardsubLine, HardsubSign, HardsubMask, bounded_dehardsub
-from yt_common import SelfRunner
 
 from typing import List
 
@@ -11,7 +13,7 @@ import sys
 sys.path.append("..")
 
 from vivy_common import (VivyConfig, VivySource, antialias, deband, denoise,  # noqa: E402
-                         finalize, fsrcnnx_rescale, letterbox_edgefix, waka_replace)
+                         finalize, fsrcnnx_rescale, letterbox_edgefix)
 
 core = vs.core
 
@@ -19,6 +21,11 @@ core = vs.core
 EPNUM: int = int(os.path.basename(os.path.splitext(__file__)[0]))
 CONFIG: VivyConfig = VivyConfig(EPNUM)
 SOURCE: VivySource = VivySource(CONFIG)
+
+WAKA_REPLACE: List[List[Range]] = [
+    [(30119, 30969)],
+    [],
+]
 SIGNS_RU: List[HardsubMask] = [
     HardsubLine((1278, 3392), ((275, 918), (1356, 112))),
     HardsubSign((3452, 3572), ((232, 857), (1077, 114)), refframes=3500),
@@ -30,10 +37,6 @@ SIGNS_RU: List[HardsubMask] = [
 NOSCALE: List[Range] = []
 NOAA: List[Range] = []
 LETTERBOX: List[Range] = [(0, 1151)]
-WAKA_REPLACE: List[List[Range]] = [
-    [(30119, 30969)],
-    [],
-]
 
 
 def filter_basic() -> vs.VideoNode:

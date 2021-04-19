@@ -1,7 +1,10 @@
 import vapoursynth as vs
 
+from yt_common.automation import SelfRunner
+from yt_common.source import waka_replace
+
 from lvsfunc.types import Range
-from lvsfunc.dehardsub import HardsubSign, bounded_dehardsub
+from lvsfunc.dehardsub import HardsubSign, HardsubMask, bounded_dehardsub
 
 from typing import List
 
@@ -9,14 +12,21 @@ import os
 import sys
 sys.path.append("..")
 
-from vivy_common import (SelfRunner, antialias, deband, denoise,  # noqa: E402
-                         finalize, fsrcnnx_rescale, letterbox_edgefix, source)
+from vivy_common import (VivyConfig, VivySource, antialias, deband, denoise,  # noqa: E402
+                         finalize, fsrcnnx_rescale, letterbox_edgefix)
 
 core = vs.core
 
 
 EPNUM: int = int(os.path.basename(os.path.splitext(__file__)[0]))
-SIGNS_RU: List[HardsubSign] = [
+CONFIG: VivyConfig = VivyConfig(EPNUM)
+SOURCE: VivySource = VivySource(CONFIG)
+
+WAKA_REPLACE: List[List[Range]] = [
+    [],
+    []
+]
+SIGNS_RU: List[HardsubMask] = [
     HardsubSign((5283, 5403), ((226, 786), (1214, 102)), highpass=2000),
     HardsubSign((6778, 6888), ((588, 454), (434, 63)), highpass=2000),
     HardsubSign((9017, 9070), ((975, 301), (157, 24)), highpass=2000),
@@ -42,9 +52,11 @@ LETTERBOX: List[Range] = [
 
 
 def filter_basic() -> vs.VideoNode:
-    waka, ref = source(EPNUM)
-    waka = waka[:37301] + core.std.BlankClip(waka, length=6) + waka[37301:]
-    src = bounded_dehardsub(waka, ref, SIGNS_RU)
+    wakas, ref = SOURCE.source()
+    wakas = [waka[:37301] + core.std.BlankClip(waka, length=6) + waka[37301:] for waka in wakas]
+    waka = wakas[0]
+    waka, wakas = waka_replace(waka, wakas[1:], WAKA_REPLACE)
+    src = bounded_dehardsub(waka, ref, SIGNS_RU, wakas)
     return src
 
 
@@ -61,6 +73,6 @@ def filter() -> vs.VideoNode:
 
 
 if __name__ == "__main__":
-    SelfRunner(EPNUM, filter, filter_basic)
+    SelfRunner(CONFIG, filter, filter_basic)
 else:
     filter()

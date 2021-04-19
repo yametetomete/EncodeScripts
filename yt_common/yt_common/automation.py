@@ -9,7 +9,7 @@ import subprocess
 from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Union, cast
 
 from .config import Config
-from .log import status, warn, error, success
+from .logging import log
 from .source import AMAZON_FILENAME, ER_FILENAME, SUBSPLS_FILENAME, FUNI_INTRO, glob_crc
 
 core = vs.core
@@ -26,7 +26,7 @@ def bin_to_plat(binary: str) -> str:
 
 
 def forward_signal(signum: int, frame: Any, process: Any) -> None:
-    warn("Forwarding SIGINT")
+    log.warn("Forwarding SIGINT")
     process.send_signal(signum)
 
 
@@ -55,12 +55,12 @@ class Encoder():
         outfile = self.out_template.format(filename=filename)
 
         if os.path.isfile(outfile) and not self.force:
-            warn("Existing output detected, skipping encode!")
+            log.warn("Existing output detected, skipping encode!")
             return outfile
 
         params = [p.format(frames=end-start, filename=filename) for p in self.params]
 
-        status("--- RUNNING ENCODE ---")
+        log.status("--- RUNNING ENCODE ---")
 
         print("+ " + " ".join([self.binary] + list(params)))
 
@@ -76,10 +76,10 @@ class Encoder():
 
         # vapoursynth should handle this itself but just in case
         if process.returncode != 0:
-            error("--- ENCODE FAILED ---")
+            log.error("--- ENCODE FAILED ---")
             raise BrokenPipeError(f"Pipe to {self.binary} broken")
 
-        success("--- ENCODE FINISHED ---")
+        log.success("--- ENCODE FINISHED ---")
         self.cleanup.append(outfile)
         return outfile
 
@@ -136,7 +136,7 @@ class AudioGetter():
         if os.path.isfile(self.config.format_filename(AMAZON_FILENAME)):
             self.audio_file = self.config.format_filename(AMAZON_FILENAME)
             self.video_src = core.ffms2.Source(self.audio_file)
-            success("Found Amazon audio")
+            log.success("Found Amazon audio")
             return
 
         # as of Ep4 SubsPlease is using new funi 128kbps aac while erai has 256kbps still
@@ -147,15 +147,15 @@ class AudioGetter():
             elif os.path.isfile(glob_crc(self.config.format_filename(SUBSPLS_FILENAME))):
                 self.audio_file = glob_crc(self.config.format_filename(SUBSPLS_FILENAME))
                 self.video_src = core.ffms2.Source(self.audio_file)
-                warn("Using SubsPlease, audio may be worse than Erai-Raws")
+                log.warn("Using SubsPlease, audio may be worse than Erai-Raws")
             else:
                 raise FileNotFoundError()
         except FileNotFoundError:
-            error("Could not find audio")
+            log.error("Could not find audio")
             raise
 
         self.audio_start = FUNI_INTRO
-        warn("No Amazon audio, falling back to Funi")
+        log.warn("No Amazon audio, falling back to Funi")
 
     def trim_audio(self, src: vs.VideoNode,
                    trims: Union[acsuite.Trim, List[acsuite.Trim], None] = None) -> str:
@@ -213,11 +213,11 @@ class SelfRunner():
         parser.add_argument("-s", "--start", nargs='?', type=int, help="Start encode at frame START")
         parser.add_argument("-e", "--end", nargs='?', type=int, help="Stop encode at frame END (inclusive)")
         parser.add_argument("-k", "--keep", help="Keep raw video", action="store_true")
-        parser.add_argument("-c", "--encoder", type=str, help="Override detected encoder binary")
+        parser.add_argument("-b", "--encoder", type=str, help="Override detected encoder binary")
         parser.add_argument("-f", "--force", help="Overwrite existing intermediaries", action="store_true")
         parser.add_argument("-a", "--audio", type=str, help="Force audio file")
         parser.add_argument("-x", "--suffix", type=str, help="Change the suffix of the mux")
-        parser.add_argument("-d", "--no-metadata", help="No extra metadata in premux", action="store_true")
+        parser.add_argument("-c", "--no-chapters", help="No chapters in premux", action="store_true")
         args = parser.parse_args()
 
         self.workraw = args.workraw if workraw_filter else False
@@ -226,10 +226,10 @@ class SelfRunner():
         self.clip = workraw_filter() if workraw_filter and self.workraw else final_filter()
 
         basename = "workraw-settings" if self.workraw else "final-settings"
-        settings_path = os.path.join(os.path.dirname(__file__), basename)
+        settings_path = os.path.join(self.config.datapath, basename)
 
         if not os.path.isfile(settings_path):
-            raise FileNotFoundError("Failed to find {basename}!")
+            raise FileNotFoundError(f"Failed to find {settings_path}!")
 
         start = args.start if args.start is not None else 0
         if args.end is not None:
@@ -254,33 +254,32 @@ class SelfRunner():
         self.encoder = Encoder(self.config.epnum, settings_path, args.encoder, args.force)
         self.video_file = self.encoder.encode(self.clip, f"{self.config.epnum:02d}_{start}_{end}", start, end)
 
-        status("--- LOOKING FOR AUDIO ---")
+        log.status("--- LOOKING FOR AUDIO ---")
         self.audio = AudioGetter(self.config, args.audio)
 
-        status("--- TRIMMING AUDIO ---")
+        log.status("--- TRIMMING AUDIO ---")
         self.audio_file = self.audio.trim_audio(self.clip, (start, end))
 
         try:
-            status("--- MUXING FILE ---")
+            log.status("--- MUXING FILE ---")
             if self._mux(f"{self.config.title.lower()}_{self.config.epnum:02d}_{self.suffix}.mkv",
-                         not args.no_metadata,
-                         not args.no_metadata and start == 0 and end == self.clip.num_frames) != 0:
+                         not args.no_chapters and start == 0 and end == self.clip.num_frames) != 0:
                 raise Exception("mkvmerge failed")
         except Exception:
-            error("--- MUXING FAILED ---")
+            log.error("--- MUXING FAILED ---")
             self.audio.do_cleanup()
             raise
 
-        success("--- MUXING SUCCESSFUL ---")
+        log.success("--- MUXING SUCCESSFUL ---")
 
         self.audio.do_cleanup()
 
         if not args.keep:
             self.encoder.do_cleanup()
 
-        success("--- ENCODE COMPLETE ---")
+        log.success("--- ENCODE COMPLETE ---")
 
-    def _mux(self, name: str, metadata: bool = True, chapters: bool = True) -> int:
+    def _mux(self, name: str, chapters: bool = True) -> int:
         mkvtoolnix_args = [
             "mkvmerge",
             "--output", name,
@@ -292,11 +291,6 @@ class SelfRunner():
             "(", self.audio_file, ")",
             "--track-order", "0:0,0:1",
         ]
-        if metadata:
-            mkvtoolnix_args += [
-                "--title", f"[{self.config.subgroup}] {self.config.title_long} - {self.config.epnum:02d}",
-            ]
-
         if chapters:
             chap = [f for f in [f"{self.config.epnum:02d}.xml", "chapters.xml"] if os.path.isfile(f)]
             if len(chap) != 0:
