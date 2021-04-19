@@ -3,70 +3,19 @@ import vapoursynth as vs
 import acsuite
 import argparse
 import os
-import functools
-import glob
-import signal
 import string
 import subprocess
-import vsutil
 
-from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Tuple, Union, cast
+from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Union, cast
+
+from .config import Config
+from .log import status, warn, error, success
+from .source import AMAZON_FILENAME, ER_FILENAME, SUBSPLS_FILENAME, FUNI_INTRO, glob_crc
 
 core = vs.core
 
-TITLE: str = "Vivy"
-TITLE_LONG: str = f"{TITLE} - Fluorite Eye's Song"
-RESOLUTION: int = 1080
-
-SUBGROUP = "YameteTomete"
-
-SUBSPLS_FILENAME: str = f"[SubsPlease] {TITLE_LONG} - {{epnum:02d}} ({RESOLUTION}p) [$CRC].mkv"
-ER_FILENAME: str = f"[Erai-raws] {TITLE_LONG} - {{epnum:02d}} [{RESOLUTION}p][Multiple Subtitle].mkv"
-FUNI_INTRO: int = 289
-WAKA_FILENAME: str = f"{TITLE}_{{epnum:02d}}_RU_HD.mp4"
-AMAZON_FILENAME: str = f"{TITLE_LONG} - {{epnum:02d}} (Amazon Prime CBR {RESOLUTION}p).mkv"
-
 AUDIO_OVERRIDE: str = "audio.mka"
-AUDIO_FMT: List[str] = [".mka", ".aac", ".wav", ".flac", ".mp3", ".ogg", ".opus", ".m4a"]
-AFV_FMT: List[str] = [".mkv", ".mp4", ".webm"]
 AUDIO_CUT: str = "_audiogetter_cut.mka"
-
-STATUS: str = '\033[94m'
-WARNING: str = '\033[93m'
-ERROR: str = '\033[91m'
-SUCCESS: str = '\033[92m'
-RESET: str = '\033[0m'
-
-
-def glob_crc(pattern: str) -> str:
-    res = glob.glob(glob.escape(pattern).replace("$CRC", "*"))
-    if len(res) == 0:
-        raise FileNotFoundError(f"File matching \"{pattern}\" not found!")
-    return res[0]
-
-
-def get_ref(epnum: int) -> vs.VideoNode:
-    if epnum >= 4:
-        if os.path.isfile(AMAZON_FILENAME.format(epnum=epnum)):
-            return core.ffms2.Source(AMAZON_FILENAME.format(epnum=epnum))
-        else:
-            print(f"{WARNING}Amazon video not found, dehardsubbing with new funi encode{RESET}")
-
-    try:
-        return core.ffms2.Source(glob_crc(SUBSPLS_FILENAME.format(epnum=epnum)))[FUNI_INTRO:]
-    except FileNotFoundError:
-        pass
-
-    if not os.path.isfile(ER_FILENAME.format(epnum=epnum)):
-        raise FileNotFoundError("Failed to find valid reference video")
-
-    return core.ffms2.Source(ER_FILENAME.format(epnum=epnum))[FUNI_INTRO:]
-
-
-def source(epnum: int) -> Tuple[vs.VideoNode, vs.VideoNode]:
-    waka = vsutil.depth(core.ffms2.Source(WAKA_FILENAME.format(epnum=epnum)), 16)
-    ref = vsutil.depth(get_ref(epnum), 16)
-    return waka, ref
 
 
 def bin_to_plat(binary: str) -> str:
@@ -77,7 +26,7 @@ def bin_to_plat(binary: str) -> str:
 
 
 def forward_signal(signum: int, frame: Any, process: Any) -> None:
-    print(f"{WARNING}Forwarding SIGINT{RESET}")
+    warn("Forwarding SIGINT")
     process.send_signal(signum)
 
 
@@ -106,30 +55,31 @@ class Encoder():
         outfile = self.out_template.format(filename=filename)
 
         if os.path.isfile(outfile) and not self.force:
-            print(f"{WARNING}Existing output detected, skipping encode!{RESET}")
+            warn("Existing output detected, skipping encode!")
             return outfile
 
         params = [p.format(frames=end-start, filename=filename) for p in self.params]
 
-        print(f"{STATUS}--- RUNNING ENCODE ---{RESET}")
+        status("--- RUNNING ENCODE ---")
 
         print("+ " + " ".join([self.binary] + list(params)))
 
         process = subprocess.Popen([self.binary] + list(params), stdin=subprocess.PIPE)
 
         # i want the encoder to handle any ctrl-c so it exits properly
-        forward_to_proc = functools.partial(forward_signal, process=process)
-        signal.signal(signal.SIGINT, forward_to_proc)
+        # forward_to_proc = functools.partial(forward_signal, process=process)
+        # signal.signal(signal.SIGINT, forward_to_proc)
+        # turns out this didn't work out the way i had hoped
 
         clip[start:end].output(cast(BinaryIO, process.stdin), y4m=True)
         process.communicate()
 
         # vapoursynth should handle this itself but just in case
         if process.returncode != 0:
-            print(f"{ERROR}--- ENCODE FAILED ---{RESET}")
+            error("--- ENCODE FAILED ---")
             raise BrokenPipeError(f"Pipe to {self.binary} broken")
 
-        print(f"{SUCCESS}--- ENCODE FINISHED ---{RESET}")
+        success("--- ENCODE FINISHED ---")
         self.cleanup.append(outfile)
         return outfile
 
@@ -153,13 +103,20 @@ class Encoder():
 
 
 class AudioGetter():
+    """
+    TODO: really should modularize this a bit instead of assuming amazon->funi
+    """
+    config: Config
+
     audio_file: str
     audio_start: int
     video_src: Optional[vs.VideoNode]
 
     cleanup: List[str]
 
-    def __init__(self, epnum: int, override: Optional[str] = None) -> None:
+    def __init__(self, config: Config, override: Optional[str] = None) -> None:
+        self.config = config
+
         self.audio_start = 0
         self.video_src = None
         self.cleanup = []
@@ -176,30 +133,29 @@ class AudioGetter():
             return
 
         # look for amazon first
-        if os.path.isfile(AMAZON_FILENAME.format(epnum=epnum)):
-            self.audio_file = AMAZON_FILENAME.format(epnum=epnum)
-            self.video_src = core.ffms2.Source(AMAZON_FILENAME.format(epnum=epnum))
-            print(f"{SUCCESS}Found Amazon audio{RESET}")
+        if os.path.isfile(self.config.format_filename(AMAZON_FILENAME)):
+            self.audio_file = self.config.format_filename(AMAZON_FILENAME)
+            self.video_src = core.ffms2.Source(self.audio_file)
+            success("Found Amazon audio")
             return
 
         # as of Ep4 SubsPlease is using new funi 128kbps aac while erai has 256kbps still
         try:
-            if os.path.isfile(ER_FILENAME.format(epnum=epnum)):
-                self.audio_file = ER_FILENAME.format(epnum=epnum)
-                self.video_src = core.ffms2.Source(ER_FILENAME.format(epnum=epnum))
-            if os.path.isfile(glob_crc(SUBSPLS_FILENAME.format(epnum=epnum))):
-                self.audio_file = glob_crc(SUBSPLS_FILENAME.format(epnum=epnum))
-                self.video_src = core.ffms2.Source(glob_crc(SUBSPLS_FILENAME.format(epnum=epnum)))
-                if (epnum >= 4):
-                    print(f"{WARNING}Using SubsPlease, audio may be worse than Erai-Raws{RESET}")
+            if os.path.isfile(self.config.format_filename(ER_FILENAME)):
+                self.audio_file = self.config.format_filename(ER_FILENAME)
+                self.video_src = core.ffms2.Source(self.audio_file)
+            elif os.path.isfile(glob_crc(self.config.format_filename(SUBSPLS_FILENAME))):
+                self.audio_file = glob_crc(self.config.format_filename(SUBSPLS_FILENAME))
+                self.video_src = core.ffms2.Source(self.audio_file)
+                warn("Using SubsPlease, audio may be worse than Erai-Raws")
             else:
                 raise FileNotFoundError()
         except FileNotFoundError:
-            print(f"{ERROR}Could not find audio{RESET}")
+            error("Could not find audio")
             raise
 
         self.audio_start = FUNI_INTRO
-        print(f"{WARNING}No Amazon audio, falling back to Funi{RESET}")
+        warn("No Amazon audio, falling back to Funi")
 
     def trim_audio(self, src: vs.VideoNode,
                    trims: Union[acsuite.Trim, List[acsuite.Trim], None] = None) -> str:
@@ -234,8 +190,8 @@ class AudioGetter():
 
 
 class SelfRunner():
+    config: Config
     clip: vs.VideoNode
-    epnum: int
 
     workraw: bool
 
@@ -245,13 +201,13 @@ class SelfRunner():
     encoder: Encoder
     audio: AudioGetter
 
-    def __init__(self, epnum: int, final_filter: Callable[[], vs.VideoNode],
+    def __init__(self, config: Config, final_filter: Callable[[], vs.VideoNode],
                  workraw_filter: Optional[Callable[[], vs.VideoNode]] = None) -> None:
-        self.epnum = epnum
+        self.config = config
         self.video_clean = False
         self.audio_clean = False
 
-        parser = argparse.ArgumentParser(description=f"Encode {TITLE} Episode {epnum:02d}")
+        parser = argparse.ArgumentParser(description=f"Encode {self.config.title} Episode {self.config.epnum:02d}")
         if workraw_filter:
             parser.add_argument("-w", "--workraw", help="Encode workraw, fast x264", action="store_true")
         parser.add_argument("-s", "--start", nargs='?', type=int, help="Start encode at frame START")
@@ -260,12 +216,12 @@ class SelfRunner():
         parser.add_argument("-c", "--encoder", type=str, help="Override detected encoder binary")
         parser.add_argument("-f", "--force", help="Overwrite existing intermediaries", action="store_true")
         parser.add_argument("-a", "--audio", type=str, help="Force audio file")
-        parser.add_argument("-x", "--suffix", type=str, default="premux", help="Change the suffix of the mux")
+        parser.add_argument("-x", "--suffix", type=str, help="Change the suffix of the mux")
         parser.add_argument("-d", "--no-metadata", help="No extra metadata in premux", action="store_true")
         args = parser.parse_args()
 
         self.workraw = args.workraw if workraw_filter else False
-        self.suffix = args.suffix if not self.workraw else "workraw"
+        self.suffix = args.suffix if args.suffix is not None else "workraw" if self.workraw else "premux"
 
         self.clip = workraw_filter() if workraw_filter and self.workraw else final_filter()
 
@@ -295,33 +251,34 @@ class SelfRunner():
         if start >= end:
             raise ValueError("Start frame must be before end frame!")
 
-        self.encoder = Encoder(epnum, settings_path, args.encoder, args.force)
-        self.video_file = self.encoder.encode(self.clip, f"{epnum:02d}_{start}_{end}", start, end)
+        self.encoder = Encoder(self.config.epnum, settings_path, args.encoder, args.force)
+        self.video_file = self.encoder.encode(self.clip, f"{self.config.epnum:02d}_{start}_{end}", start, end)
 
-        print(f"{STATUS}--- LOOKING FOR AUDIO ---{RESET}")
-        self.audio = AudioGetter(self.epnum, args.audio)
+        status("--- LOOKING FOR AUDIO ---")
+        self.audio = AudioGetter(self.config, args.audio)
 
-        print(f"{STATUS}--- TRIMMING AUDIO ---{RESET}")
+        status("--- TRIMMING AUDIO ---")
         self.audio_file = self.audio.trim_audio(self.clip, (start, end))
 
         try:
-            print(f"{STATUS}--- MUXING FILE ---{RESET}")
-            if self._mux(f"{TITLE.lower()}_{epnum:02d}_{args.suffix}.mkv", not args.no_metadata,
+            status("--- MUXING FILE ---")
+            if self._mux(f"{self.config.title.lower()}_{self.config.epnum:02d}_{self.suffix}.mkv",
+                         not args.no_metadata,
                          not args.no_metadata and start == 0 and end == self.clip.num_frames) != 0:
                 raise Exception("mkvmerge failed")
         except Exception:
-            print(f"{ERROR}--- MUXING FAILED ---{RESET}")
+            error("--- MUXING FAILED ---")
             self.audio.do_cleanup()
             raise
 
-        print(f"{SUCCESS}--- MUXING SUCCESSFUL ---{RESET}")
+        success("--- MUXING SUCCESSFUL ---")
 
         self.audio.do_cleanup()
 
         if not args.keep:
             self.encoder.do_cleanup()
 
-        print(f"{SUCCESS}--- ENCODE COMPLETE ---{RESET}")
+        success("--- ENCODE COMPLETE ---")
 
     def _mux(self, name: str, metadata: bool = True, chapters: bool = True) -> int:
         mkvtoolnix_args = [
@@ -337,11 +294,11 @@ class SelfRunner():
         ]
         if metadata:
             mkvtoolnix_args += [
-                "--title", f"[{SUBGROUP}] {TITLE_LONG} - {self.epnum:02d}",
+                "--title", f"[{self.config.subgroup}] {self.config.title_long} - {self.config.epnum:02d}",
             ]
 
         if chapters:
-            chap = [f for f in ["{self.epnum:02d}.xml", "chapters.xml"] if os.path.isfile(f)]
+            chap = [f for f in [f"{self.config.epnum:02d}.xml", "chapters.xml"] if os.path.isfile(f)]
             if len(chap) != 0:
                 mkvtoolnix_args += [
                     "--chapters", chap[0],
