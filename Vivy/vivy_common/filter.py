@@ -16,7 +16,8 @@ core = vs.core
 FSRCNNX = os.path.join(os.path.dirname(__file__), "shaders/FSRCNNX_x2_56-16-4-1.glsl")
 
 
-def fsrcnnx_rescale(src: vs.VideoNode, noscale: Optional[List[Range]] = None) -> vs.VideoNode:
+def fsrcnnx_rescale(src: vs.VideoNode, noscale: Optional[List[Range]] = None,
+                    kernel: Optional[lvf.kernels.Kernel] = None) -> vs.VideoNode:
     def _vdf_fsrcnnx(clip: vs.VideoNode, width: int, height: int) -> vs.VideoNode:
         clip = core.std.ShufflePlanes([vsutil.depth(clip.resize.Point(vsutil.get_w(864), 864), 16),
                                        src.resize.Bicubic(vsutil.get_w(864), 864)],
@@ -24,7 +25,8 @@ def fsrcnnx_rescale(src: vs.VideoNode, noscale: Optional[List[Range]] = None) ->
 
         return vsutil.get_y(vsutil.depth(vdf.fsrcnnx_upscale(clip, width, height, FSRCNNX), 32))
 
-    descale = lvf.scale.descale(src, height=864, upscaler=_vdf_fsrcnnx, kernel=lvf.kernels.Bicubic()) \
+    kernel = kernel if kernel else lvf.kernels.Bicubic()
+    descale = lvf.scale.descale(src, height=864, upscaler=_vdf_fsrcnnx, kernel=kernel) \
         .resize.Bicubic(format=vs.YUV420P16)
     return lvf.misc.replace_ranges(descale, src, noscale) if noscale else descale
 
@@ -34,8 +36,8 @@ def letterbox_edgefix(clip: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
     return lvf.misc.replace_ranges(clip, edgefix, ranges)
 
 
-def denoise(clip: vs.VideoNode) -> vs.VideoNode:
-    bm3d = BM3D(clip, sigma=[1.5, 0], depth=16)
+def denoise(clip: vs.VideoNode, sigma: float = 0.75) -> vs.VideoNode:
+    bm3d = BM3D(clip, sigma=[sigma, 0], depth=16)
     knl = core.knlm.KNLMeansCL(clip, d=3, a=2, h=0.4, channels="UV", device_type='gpu', device_id=0)
     return core.std.ShufflePlanes([bm3d, knl], planes=[0, 1, 2], colorfamily=vs.YUV)
 
