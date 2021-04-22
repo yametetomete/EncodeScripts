@@ -1,1 +1,1 @@
-from . import config, automation, logging, source  # noqa: F401
+from . import antialiasing, config, automation, logging, source  # noqa: F401

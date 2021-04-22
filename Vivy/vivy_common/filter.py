@@ -8,6 +8,8 @@ from lvsfunc.types import Range
 from mvsfunc import BM3D
 from typing import List, Optional
 
+from yt_common import antialiasing
+
 import os
 import vsutil
 
@@ -37,19 +39,17 @@ def letterbox_edgefix(clip: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
 
 
 def denoise(clip: vs.VideoNode, sigma: float = 0.75) -> vs.VideoNode:
-    bm3d = BM3D(clip, sigma=[sigma, 0], depth=16)
-    knl = core.knlm.KNLMeansCL(clip, d=3, a=2, h=0.4, channels="UV", device_type='gpu', device_id=0)
-    return core.std.ShufflePlanes([bm3d, knl], planes=[0, 1, 2], colorfamily=vs.YUV)
+    bm3d: vs.VideoNode = BM3D(clip, sigma=sigma, depth=16)
+    return bm3d
 
 
 def deband(clip: vs.VideoNode) -> vs.VideoNode:
-    deb = vdf.dumb3kdb(clip, radius=18, threshold=36, grain=[24, 0])
-    assert isinstance(deb, vs.VideoNode)
+    deb: vs.VideoNode = vdf.dumb3kdb(clip, radius=18, threshold=36, grain=[24, 0])
     return deb
 
 
 def antialias(clip: vs.VideoNode, noaa: Optional[List[Range]] = None) -> vs.VideoNode:
-    clamp = lvf.aa.nneedi3_clamp(clip)
+    clamp = antialiasing.sraa_clamp(clip, mask=antialiasing.aa_mask_strong(clip))
     return lvf.misc.replace_ranges(clamp, clip, noaa) if noaa else clamp
 
 
