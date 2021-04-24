@@ -3,6 +3,8 @@ import vapoursynth as vs
 import acsuite
 import argparse
 import os
+import random
+import shutil
 import string
 import subprocess
 
@@ -217,8 +219,15 @@ class SelfRunner():
         parser.add_argument("-f", "--force", help="Overwrite existing intermediaries", action="store_true")
         parser.add_argument("-a", "--audio", type=str, help="Force audio file")
         parser.add_argument("-x", "--suffix", type=str, help="Change the suffix of the mux")
-        parser.add_argument("-c", "--no-chapters", help="No chapters in premux", action="store_true")
+        parser.add_argument("-c", "--comparison", help="Output a comparison between workraw and final",
+                            action="store_true")
         args = parser.parse_args()
+
+        if args.comparison and workraw_filter:
+            log.status("Generating comparison...")
+            gencomp(10, "comp", src=workraw_filter(), final=final_filter())
+            log.status("Comparison generated.")
+            return
 
         self.workraw = args.workraw if workraw_filter else False
         self.suffix = args.suffix if args.suffix is not None else "workraw" if self.workraw else "premux"
@@ -263,7 +272,7 @@ class SelfRunner():
         try:
             log.status("--- MUXING FILE ---")
             if self._mux(f"{self.config.title.lower()}_{self.config.epnum:02d}_{self.suffix}.mkv",
-                         not args.no_chapters and start == 0 and end == self.clip.num_frames) != 0:
+                         start == 0 and end == self.clip.num_frames) != 0:
                 raise Exception("mkvmerge failed")
         except Exception:
             log.error("--- MUXING FAILED ---")
@@ -300,3 +309,25 @@ class SelfRunner():
 
         print("+ " + " ".join(mkvtoolnix_args))
         return subprocess.call(mkvtoolnix_args)
+
+
+def gencomp(num: int = 10, path: str = "comp", matrix: str = "709", **clips: vs.VideoNode) -> None:
+    lens = set(c.num_frames for c in clips.values())
+    if len(lens) != 1:
+        raise ValueError("gencomp: 'Clips must be equal length!'")
+
+    frames = random.sample(range(lens.pop()), num)
+
+    if os.path.exists(path):
+        shutil.rmtree(path)
+
+    os.makedirs(path)
+
+    for name, clip in clips.items():
+        log.status(f"Rendering clip {name}")
+        splice = clip[frames[0]]
+        for f in frames[1:]:
+            splice += clip[f]
+        splice = splice.resize.Bicubic(format=vs.RGB24, matrix_in_s=matrix) \
+            .imwri.Write("PNG", os.path.join(path, f"{name}%0{len(str(num))}d.png"))
+        [splice.get_frame(f) for f in range(splice.num_frames)]
