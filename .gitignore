@@ -21,3 +21,4 @@ ffmpeg2pass*.log
 **/.vspreview/
 **/results/
 **/__pycache__/
+**/*.egg-info/

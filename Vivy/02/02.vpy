@@ -1,5 +1,8 @@
 import vapoursynth as vs
 
+from vivy_common import (VivyConfig, VivySource, antialias, deband, denoise, finalize,
+                         fsrcnnx_rescale)
+
 from yt_common.automation import SelfRunner
 from yt_common.source import waka_replace
 
@@ -9,11 +12,6 @@ from lvsfunc.dehardsub import HardsubMask, HardsubSign, bounded_dehardsub
 from typing import List
 
 import os
-import sys
-sys.path.append("..")
-
-from vivy_common import (VivyConfig, VivySource, antialias, deband, denoise, finalize,  # noqa: E402
-                         fsrcnnx_rescale)
 
 core = vs.core
 

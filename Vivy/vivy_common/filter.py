@@ -49,7 +49,7 @@ def deband(clip: vs.VideoNode) -> vs.VideoNode:
 
 
 def antialias(clip: vs.VideoNode, noaa: Optional[List[Range]] = None) -> vs.VideoNode:
-    clamp = antialiasing.sraa_clamp(clip, mask=antialiasing.aa_mask_strong(clip))
+    clamp = antialiasing.sraa_clamp(clip, mask=antialiasing.mask_strong(clip))
     return lvf.misc.replace_ranges(clamp, clip, noaa) if noaa else clamp
 
 
