@@ -58,9 +58,13 @@ def antialias(clip: vs.VideoNode, weak: Optional[List[Range]] = None, noaa: Opti
 def regrain(clip: vs.VideoNode) -> vs.VideoNode:
     mask_bright = clip.std.PlaneStats().adg.Mask(10)
     mask_dark = clip.std.PlaneStats().adg.Mask(25)
-    sgrain = core.std.MaskedMerge(clip, clip.grain.Add(var=0.2, constant=True, seed=393), mask_bright)
-    dgrain = core.std.MaskedMerge(clip, clip.grain.Add(var=0.15, constant=False, seed=393), mask_dark)
-    grain = core.std.MergeDiff(dgrain, clip.std.MakeDiff(sgrain))
+    sgrain_l = core.std.MaskedMerge(clip, clip.grain.Add(var=0.1, constant=True, seed=393), mask_bright.std.Invert())
+    sgrain_h = core.std.MaskedMerge(clip, core.std.MaskedMerge(clip, clip.grain.Add(var=0.2, constant=True, seed=393),
+                                                               mask_bright),
+                                    mask_dark.std.Invert())
+    sgrain = sgrain_h.std.MergeDiff(clip.std.MakeDiff(sgrain_l))
+    dgrain = core.std.MaskedMerge(clip, clip.grain.Add(var=0.3, constant=False, seed=393), mask_dark)
+    grain = dgrain.std.MergeDiff(clip.std.MakeDiff(sgrain))
     return grain
 
 
