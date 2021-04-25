@@ -12,7 +12,7 @@ from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Union, cas
 
 from .config import Config
 from .logging import log
-from .source import AMAZON_FILENAME, ER_FILENAME, SUBSPLS_FILENAME, FUNI_INTRO, glob_crc
+from .source import AMAZON_FILENAME, ER_FILENAME, SUBSPLS_FILENAME, FUNI_INTRO, glob_filename
 
 core = vs.core
 
@@ -141,17 +141,14 @@ class AudioGetter():
             log.success("Found Amazon audio")
             return
 
-        # as of Ep4 SubsPlease is using new funi 128kbps aac while erai has 256kbps still
         try:
-            if os.path.isfile(self.config.format_filename(ER_FILENAME)):
-                self.audio_file = self.config.format_filename(ER_FILENAME)
-                self.video_src = core.ffms2.Source(self.audio_file)
-            elif os.path.isfile(glob_crc(self.config.format_filename(SUBSPLS_FILENAME))):
-                self.audio_file = glob_crc(self.config.format_filename(SUBSPLS_FILENAME))
-                self.video_src = core.ffms2.Source(self.audio_file)
-                log.warn("Using SubsPlease, audio may be worse than Erai-Raws")
-            else:
-                raise FileNotFoundError()
+            self.audio_file = glob_filename(self.config.format_filename(SUBSPLS_FILENAME))
+            self.video_src = core.ffms2.Source(self.audio_file)
+        except FileNotFoundError:
+            pass
+        try:
+            self.audio_file = glob_filename(self.config.format_filename(ER_FILENAME))
+            self.video_src = core.ffms2.Source(self.audio_file)
         except FileNotFoundError:
             log.error("Could not find audio")
             raise
@@ -203,6 +200,8 @@ class SelfRunner():
     encoder: Encoder
     audio: AudioGetter
 
+    profile: str
+
     def __init__(self, config: Config, final_filter: Callable[[], vs.VideoNode],
                  workraw_filter: Optional[Callable[[], vs.VideoNode]] = None) -> None:
         self.config = config
@@ -211,34 +210,29 @@ class SelfRunner():
 
         parser = argparse.ArgumentParser(description=f"Encode {self.config.title} Episode {self.config.epnum:02d}")
         if workraw_filter:
-            parser.add_argument("-w", "--workraw", help="Encode workraw, fast x264", action="store_true")
-        parser.add_argument("-s", "--start", nargs='?', type=int, help="Start encode at frame START")
-        parser.add_argument("-e", "--end", nargs='?', type=int, help="Stop encode at frame END (inclusive)")
+            parser.add_argument("-w", "--workraw", help="Encode workraw, fast x264.", action="store_true")
+        parser.add_argument("-s", "--start", nargs='?', type=int, help="Start encode at frame START.")
+        parser.add_argument("-e", "--end", nargs='?', type=int, help="Stop encode at frame END (inclusive).")
         parser.add_argument("-k", "--keep", help="Keep raw video", action="store_true")
-        parser.add_argument("-b", "--encoder", type=str, help="Override detected encoder binary")
-        parser.add_argument("-f", "--force", help="Overwrite existing intermediaries", action="store_true")
+        parser.add_argument("-b", "--encoder", type=str, help="Override detected encoder binary.")
+        parser.add_argument("-f", "--force", help="Overwrite existing intermediaries.", action="store_true")
         parser.add_argument("-a", "--audio", type=str, help="Force audio file")
-        parser.add_argument("-x", "--suffix", type=str, help="Change the suffix of the mux")
-        parser.add_argument("-c", "--comparison", help="Output a comparison between workraw and final",
+        parser.add_argument("-x", "--suffix", type=str, help="Change the suffix of the mux. \
+                            Will be overridden by PROFILE if set.")
+        parser.add_argument("-p", "--profile", type=str, help="Set the encoder profile. \
+                            Overrides SUFFIX when set. Defaults to \"workraw\" when WORKRAW is set, else \"final.\"")
+        parser.add_argument("-c", "--comparison", help="Output a comparison between workraw and final. \
+                            Will search for the output file to include in comparison, if present.",
                             action="store_true")
         args = parser.parse_args()
 
-        if args.comparison and workraw_filter:
-            log.status("Generating comparison...")
-            gencomp(10, "comp", src=workraw_filter(), final=final_filter())
-            log.status("Comparison generated.")
-            return
-
         self.workraw = args.workraw if workraw_filter else False
+        self.profile = "workraw" if self.workraw else "final"
+        self.profile = args.profile or self.profile
         self.suffix = args.suffix if args.suffix is not None else "workraw" if self.workraw else "premux"
+        self.suffix = args.profile or self.suffix
 
         self.clip = workraw_filter() if workraw_filter and self.workraw else final_filter()
-
-        basename = "workraw-settings" if self.workraw else "final-settings"
-        settings_path = os.path.join(self.config.datapath, basename)
-
-        if not os.path.isfile(settings_path):
-            raise FileNotFoundError(f"Failed to find {settings_path}!")
 
         start = args.start if args.start is not None else 0
         if args.end is not None:
@@ -260,8 +254,27 @@ class SelfRunner():
         if start >= end:
             raise ValueError("Start frame must be before end frame!")
 
+        out_name = f"{self.config.title.lower()}_{self.config.epnum:02d}_{self.suffix}.mkv"
+
+        if args.comparison and workraw_filter:
+            log.status("Generating comparison...")
+            if os.path.isfile(out_name):
+                pmx = core.ffms2.Source(out_name)
+                if pmx.num_frames == self.clip.num_frames:
+                    pmx = pmx[start:end]
+                gencomp(10, "comp", src=workraw_filter()[start:end], final=final_filter()[start:end], encode=pmx)
+            else:
+                gencomp(10, "comp", src=workraw_filter()[start:end], final=final_filter()[start:end])
+            log.status("Comparison generated.")
+            return
+
+        settings_path = os.path.join(self.config.datapath, f"{self.profile}-settings")
+        if not os.path.isfile(settings_path):
+            raise FileNotFoundError(f"Failed to find {settings_path}!")
+
         self.encoder = Encoder(self.config.epnum, settings_path, args.encoder, args.force)
-        self.video_file = self.encoder.encode(self.clip, f"{self.config.epnum:02d}_{start}_{end}", start, end)
+        self.video_file = self.encoder.encode(self.clip, f"{self.config.epnum:02d}_{self.suffix}_{start}_{end}",
+                                              start, end)
 
         log.status("--- LOOKING FOR AUDIO ---")
         self.audio = AudioGetter(self.config, args.audio)
@@ -271,8 +284,7 @@ class SelfRunner():
 
         try:
             log.status("--- MUXING FILE ---")
-            if self._mux(f"{self.config.title.lower()}_{self.config.epnum:02d}_{self.suffix}.mkv",
-                         start == 0 and end == self.clip.num_frames) != 0:
+            if self._mux(out_name, start == 0 and end == self.clip.num_frames) != 0:
                 raise Exception("mkvmerge failed")
         except Exception:
             log.error("--- MUXING FAILED ---")
@@ -316,7 +328,7 @@ def gencomp(num: int = 10, path: str = "comp", matrix: str = "709", **clips: vs.
     if len(lens) != 1:
         raise ValueError("gencomp: 'Clips must be equal length!'")
 
-    frames = random.sample(range(lens.pop()), num)
+    frames = sorted(random.sample(range(lens.pop()), num))
 
     if os.path.exists(path):
         shutil.rmtree(path)

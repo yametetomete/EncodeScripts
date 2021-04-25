@@ -16,8 +16,8 @@ from .logging import log
 
 core = vs.core
 
-SUBSPLS_FILENAME: str = "[SubsPlease] {title_long} - {epnum:02d} ({resolution}p) [$CRC].mkv"
-ER_FILENAME: str = "[Erai-raws] {title_long} - {epnum:02d} [v0][{resolution}p].mkv"
+SUBSPLS_FILENAME: str = "[SubsPlease] {title_long} - {epnum:02d} ({resolution}p) [$GLOB].mkv"
+ER_FILENAME: str = "[Erai-raws] {title_long} - {epnum:02d} [v0][{resolution}p]$GLOB.mkv"
 FUNI_INTRO: int = 289
 AMAZON_FILENAME: str = "{title_long} - {epnum:02d} (Amazon Prime CBR {resolution}p).mkv"
 
@@ -37,8 +37,8 @@ def waka_replace(src: vs.VideoNode, wakas: List[vs.VideoNode], ranges: List[List
     return src, new_wakas
 
 
-def glob_crc(pattern: str) -> str:
-    res = glob.glob(glob.escape(pattern).replace("$CRC", "*"))
+def glob_filename(pattern: str) -> str:
+    res = glob.glob(glob.escape(pattern).replace("$GLOB", "*"))
     if len(res) == 0:
         raise FileNotFoundError(f"File matching \"{pattern}\" not found!")
     return res[0]
@@ -74,11 +74,16 @@ class FunimationSource(DehardsubFileFinder):
         return core.ffms2.Source(self.config.format_filename(AMAZON_FILENAME))
 
     def get_funi_filename(self) -> str:
-        if os.path.isfile(self.config.format_filename(ER_FILENAME)):
-            return self.config.format_filename(ER_FILENAME)
+        try:
+            return glob_filename(self.config.format_filename(ER_FILENAME))
+        except FileNotFoundError:
+            pass
 
-        log.error("Erai-raws not found, falling back to SubsPlease")
-        return glob_crc(self.config.format_filename(SUBSPLS_FILENAME))
+        try:
+            return glob_filename(self.config.format_filename(SUBSPLS_FILENAME))
+        except FileNotFoundError:
+            log.error("Could not find funimation video")
+            raise
 
     def get_funi(self) -> vs.VideoNode:
         return core.ffms2.Source(self.get_funi_filename())[FUNI_INTRO:]
