@@ -1,7 +1,7 @@
 import vapoursynth as vs
 
 from vivy_common import (VivyConfig, VivySource, antialias, deband, denoise,
-                         finalize, fsrcnnx_rescale, letterbox_edgefix)
+                         finalize, fsrcnnx_rescale, letterbox_edgefix, regrain)
 
 from yt_common.automation import SelfRunner
 from yt_common.source import waka_replace
@@ -14,6 +14,7 @@ from typing import List
 import os
 
 core = vs.core
+core.num_threads = 16
 
 
 EPNUM: int = int(os.path.basename(os.path.splitext(__file__)[0]))
@@ -43,6 +44,7 @@ def filter_basic() -> vs.VideoNode:
     waka = wakas[0]
     waka, wakas = waka_replace(waka, wakas[1:], WAKA_REPLACE)
     src = bounded_dehardsub(waka, ref, SIGNS_RU, wakas)
+    src.set_output(1)
     return src
 
 
@@ -52,7 +54,8 @@ def filter() -> vs.VideoNode:
     den = denoise(rescale)
     deb = deband(den)
     aa = antialias(deb, NOAA)
-    edgefix = letterbox_edgefix(aa, LETTERBOX)
+    grain = regrain(aa)
+    edgefix = letterbox_edgefix(grain, LETTERBOX)
     final = finalize(edgefix)
     final.set_output()
     return final
