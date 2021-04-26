@@ -8,7 +8,7 @@ from yt_common.source import waka_replace
 
 from typing import List, Optional
 
-from lvsfunc.dehardsub import HardsubLineFade, HardsubSignFade, HardsubMask, bounded_dehardsub
+from lvsfunc.dehardsub import HardsubSignFade, HardsubMask, bounded_dehardsub
 from lvsfunc.types import Range
 
 import os
@@ -46,8 +46,6 @@ TITLECARDS: List[Range] = [
 ]
 
 SIGNS_RU: List[HardsubMask] = [
-    HardsubLineFade([
-    ], ((449, 51), (1015, 127)), refframe=0.75),
     HardsubSignFade([
         (318, 347),
         (4607, 4702),
@@ -71,9 +69,23 @@ SIGNS_RU: List[HardsubMask] = [
 
 SIGNS_RU += [HardsubSignFade(tc) for tc in TITLECARDS]
 
+AA_STRONG: List[Range] = [
+    # the stars in this range respond poorly to nnedi3-clamped AAs, but fine to sraa
+    (13374, 13889),
+    (14022, 14270),
+    (14994, 15233),
+    (15540, 15779),
+    (16086, 16277),
+    (19530, 19805),
+    (19995, 20177),
+    (20190, 20669),
+    (20856, 21020),
+]
+
 AA_WEAK: List[Range] = [
     (0, 35),
     (282, 347),
+    (17757, 18068),
     (18069, 18440),
 ]
 
@@ -98,7 +110,7 @@ def filter() -> vs.VideoNode:
     src = filter_basic()
     den = denoise(src)
     deb = deband(den)
-    aa = antialias(deb, weak=AA_WEAK, noaa=AA_NONE)
+    aa = antialias(deb, strong=AA_STRONG, weak=AA_WEAK, noaa=AA_NONE)
     scenefilter = stupid_op_scenefilter(aa, deb, OP)
     grain = regrain(scenefilter)
     final = finalize(grain)
