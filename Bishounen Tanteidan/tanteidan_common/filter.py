@@ -5,6 +5,8 @@ import vsutil
 from G41Fun import MaskedDHA
 from debandshit import f3kbilateral
 from havsfunc import LSFmod
+from lvsfunc.aa import upscaled_sraa
+from lvsfunc.kernels import Bicubic
 from lvsfunc.mask import detail_mask
 from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
@@ -15,6 +17,8 @@ from typing import List, Optional, Sequence, Union
 
 from yt_common.antialiasing import combine_mask, sraa_clamp
 from yt_common.deband import morpho_mask
+
+from .scenefilter import get_op_scenefilters
 
 
 core = vs.core
@@ -43,7 +47,8 @@ def deband(clip: vs.VideoNode) -> vs.VideoNode:
     return deband
 
 
-def antialias(clip: vs.VideoNode, weak: Optional[List[Range]] = None, noaa: Optional[List[Range]] = None,
+def antialias(clip: vs.VideoNode, strong: Optional[List[Range]] = None,
+              weak: Optional[List[Range]] = None, noaa: Optional[List[Range]] = None,
               dehalo: bool = True, sharpen: bool = False) -> vs.VideoNode:
     def _sraa_pp_sharpdehalo(sraa: vs.VideoNode) -> vs.VideoNode:
         if sharpen:  # all this really seems to do is make the haloing worse, will not be using!
@@ -52,7 +57,8 @@ def antialias(clip: vs.VideoNode, weak: Optional[List[Range]] = None, noaa: Opti
         sraa = MaskedDHA(sraa, rx=1.7, ry=1.7, darkstr=0, brightstr=0.75) if dehalo else sraa
         return sraa
     clamp = sraa_clamp(clip, mask=combine_mask(clip, weak or []), postprocess=_sraa_pp_sharpdehalo)
-    return replace_ranges(clamp, clip, noaa or [])
+    sraa = upscaled_sraa(clip, rfactor=2, downscaler=Bicubic(b=0, c=1/2).scale)
+    return replace_ranges(replace_ranges(clamp, clip, noaa or []), sraa, strong or [])
 
 
 def regrain(clip: vs.VideoNode) -> vs.VideoNode:
@@ -66,6 +72,16 @@ def regrain(clip: vs.VideoNode) -> vs.VideoNode:
     dgrain = core.std.MaskedMerge(clip, clip.grain.Add(var=0.3, constant=False, seed=393), mask_dark)
     grain = dgrain.std.MergeDiff(clip.std.MakeDiff(sgrain))
     return grain
+
+
+def stupid_op_scenefilter(aa: vs.VideoNode, deb: vs.VideoNode, start: Optional[int]) -> vs.VideoNode:
+    if start is None:
+        return aa
+    aastrong, masks = get_op_scenefilters(start)
+    sraa = replace_ranges(aa, upscaled_sraa(deb, rfactor=2, downscaler=Bicubic(b=0, c=1/2).scale), aastrong)
+    for mask in masks:
+        sraa = replace_ranges(sraa, core.std.MaskedMerge(sraa, aa, mask.get_mask(deb, deb)), mask.ranges)
+    return sraa
 
 
 def finalize(clip: vs.VideoNode) -> vs.VideoNode:

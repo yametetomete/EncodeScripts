@@ -1,11 +1,12 @@
 import vapoursynth as vs
 
-from tanteidan_common import (PrettyConfig, PrettySource, antialias, deband, denoise, finalize, regrain)
+from tanteidan_common import (PrettyConfig, PrettySource, antialias, deband,
+                              denoise, finalize, regrain, stupid_op_scenefilter)
 
 from yt_common.automation import SelfRunner
 from yt_common.source import waka_replace
 
-from typing import List
+from typing import List, Optional
 
 from lvsfunc.dehardsub import HardsubLineFade, HardsubSignFade, HardsubMask, bounded_dehardsub
 from lvsfunc.types import Range
@@ -19,6 +20,8 @@ core = vs.core
 EPNUM: int = int(os.path.basename(os.path.splitext(__file__)[0]))
 CONFIG: PrettyConfig = PrettyConfig(EPNUM)
 SOURCE: PrettySource = PrettySource(CONFIG)
+
+OP: Optional[int] = 792
 
 WAKA_REPLACE: List[List[Range]] = [
     [(31864, 32652)],
@@ -76,7 +79,6 @@ AA_WEAK: List[Range] = [
 
 AA_WEAK += TITLECARDS
 
-
 AA_NONE: List[Range] = [
     (5972, 6091),  # this is heavily stylized and i'm not touching it
 ]
@@ -97,7 +99,8 @@ def filter() -> vs.VideoNode:
     den = denoise(src)
     deb = deband(den)
     aa = antialias(deb, weak=AA_WEAK, noaa=AA_NONE)
-    grain = regrain(aa)
+    scenefilter = stupid_op_scenefilter(aa, deb, OP)
+    grain = regrain(scenefilter)
     final = finalize(grain)
     final.set_output()
     return final
