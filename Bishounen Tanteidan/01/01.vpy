@@ -8,6 +8,7 @@ from yt_common.source import waka_replace
 from typing import List
 from lvsfunc.dehardsub import HardsubLineFade, HardsubMask, HardsubSign, bounded_dehardsub
 from lvsfunc.types import Range
+from lvsfunc.misc import replace_ranges
 
 import os
 
@@ -89,6 +90,7 @@ def filter_basic() -> vs.VideoNode:
     wakas = [w[0] + w for w in wakas]
     waka = wakas[0]
     waka, wakas = waka_replace(waka, wakas[1:], WAKA_REPLACE)
+    waka = replace_ranges(waka, ref, [(30497, 30556)])  # wth wakanim
     src = bounded_dehardsub(waka, ref, SIGNS_RU, wakas)
     src.set_output(1)
     return src
