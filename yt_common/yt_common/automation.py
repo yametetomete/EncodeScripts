@@ -323,12 +323,14 @@ class SelfRunner():
         return subprocess.call(mkvtoolnix_args)
 
 
-def gencomp(num: int = 10, path: str = "comp", matrix: str = "709", **clips: vs.VideoNode) -> None:
+def gencomp(num: int = 10, path: str = "comp", matrix: str = "709",
+            firstnum: int = 1, **clips: vs.VideoNode) -> None:
     lens = set(c.num_frames for c in clips.values())
     if len(lens) != 1:
         raise ValueError("gencomp: 'Clips must be equal length!'")
 
     frames = sorted(random.sample(range(lens.pop()), num))
+    print("Sample frames: " + str(frames))
 
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -341,5 +343,5 @@ def gencomp(num: int = 10, path: str = "comp", matrix: str = "709", **clips: vs.
         for f in frames[1:]:
             splice += clip[f]
         splice = splice.resize.Bicubic(format=vs.RGB24, matrix_in_s=matrix) \
-            .imwri.Write("PNG", os.path.join(path, f"{name}%0{len(str(num))}d.png"))
+            .imwri.Write("PNG", os.path.join(path, f"{name}%0{len(str(num))}d.png"), firstnum=firstnum)
         [splice.get_frame(f) for f in range(splice.num_frames)]
