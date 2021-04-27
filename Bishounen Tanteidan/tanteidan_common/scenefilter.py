@@ -78,6 +78,9 @@ def get_op_scenefilters(start: Optional[int]) -> Tuple[List[Range], List[Deferre
     if start is None:
         return [], []
     return [
+        (start+319, start+320),
+        (start+327, start+328),
+        (start+334, start+335),
         (start+1019, start+1021),
         (start+1029, start+1031),
         (start+1039, start+1041),
