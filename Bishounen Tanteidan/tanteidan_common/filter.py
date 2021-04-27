@@ -56,8 +56,9 @@ def antialias(clip: vs.VideoNode, strong: Optional[List[Range]] = None,
             sraa = core.std.ShufflePlanes([y, sraa], planes=[0, 1, 2], colorfamily=vs.YUV)
         sraa = MaskedDHA(sraa, rx=1.7, ry=1.7, darkstr=0, brightstr=0.75) if dehalo else sraa
         return sraa
-    clamp = sraa_clamp(clip, mask=combine_mask(clip, weak or []), postprocess=_sraa_pp_sharpdehalo)
-    sraa = upscaled_sraa(clip, rfactor=2, downscaler=Bicubic(b=0, c=1/2).scale)
+    mask = combine_mask(clip, weak or [])
+    clamp = sraa_clamp(clip, mask=mask, postprocess=_sraa_pp_sharpdehalo)
+    sraa = core.std.MaskedMerge(clip, upscaled_sraa(clip, rfactor=2, downscaler=Bicubic(b=0, c=1/2).scale), mask)
     return replace_ranges(replace_ranges(clamp, clip, noaa or []), sraa, strong or [])
 
 
