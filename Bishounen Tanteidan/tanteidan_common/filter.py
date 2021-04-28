@@ -89,7 +89,15 @@ def wd_scenefilter(aa: vs.VideoNode, deb: vs.VideoNode, start: Optional[int]) ->
     # this does icky things to the credits but until we get NC it's way worth it
     if start is None:
         return aa
-    WD_AA_STRONG: List[Range] = [(start+1263, start+1355), (start+1468, start+1617)]
+    WD_AA_STRONG: List[Range] = [
+        (start+26, start+33),
+        (start+34, start+41),
+        (start+984, start+1076),
+        (start+1077, start+1169),
+        (start+1170, start+1262),
+        (start+1263, start+1355),
+        (start+1468, start+1617),
+    ]
     sraa = upscaled_sraa(deb, rfactor=1.6, downscaler=Bicubic(b=0, c=1/2).scale)
     return replace_ranges(aa, sraa, WD_AA_STRONG)
 
