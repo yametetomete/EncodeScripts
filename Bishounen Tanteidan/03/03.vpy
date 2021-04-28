@@ -1,7 +1,8 @@
 import vapoursynth as vs
 
 from tanteidan_common import (PrettyConfig, PrettySource, antialias, deband,
-                              denoise, finalize, regrain, stupid_op_scenefilter)
+                              denoise, finalize, regrain, stupid_op_scenefilter,
+                              wd_scenefilter)
 
 from yt_common.automation import SelfRunner
 from yt_common.source import waka_replace
@@ -22,6 +23,7 @@ CONFIG: PrettyConfig = PrettyConfig(EPNUM)
 SOURCE: PrettySource = PrettySource(CONFIG)
 
 OP: Optional[int] = 0
+WELCOMING_DAYS: Optional[int] = 31864
 
 WAKA_REPLACE: List[List[Range]] = [
     [(1852, 1965), (31864, 32661)],
@@ -94,6 +96,8 @@ def filter() -> vs.VideoNode:
     deb = deband(den)
     aa = antialias(deb, strong=AA_STRONG, weak=AA_WEAK, noaa=AA_NONE)
     scenefilter = stupid_op_scenefilter(aa, deb, OP)
+    if WELCOMING_DAYS is not None:
+        scenefilter = wd_scenefilter(aa, deb, WELCOMING_DAYS)
     grain = regrain(scenefilter)
     final = finalize(grain)
     final.set_output()

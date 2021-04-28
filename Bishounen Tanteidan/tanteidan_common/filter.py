@@ -85,5 +85,14 @@ def stupid_op_scenefilter(aa: vs.VideoNode, deb: vs.VideoNode, start: Optional[i
     return sraa
 
 
+def wd_scenefilter(aa: vs.VideoNode, deb: vs.VideoNode, start: Optional[int]) -> vs.VideoNode:
+    # this does icky things to the credits but until we get NC it's way worth it
+    if start is None:
+        return aa
+    WD_AA_STRONG: List[Range] = [(start+1263, start+1355), (start+1468, start+1617)]
+    sraa = upscaled_sraa(deb, rfactor=1.6, downscaler=Bicubic(b=0, c=1/2).scale)
+    return replace_ranges(aa, sraa, WD_AA_STRONG)
+
+
 def finalize(clip: vs.VideoNode) -> vs.VideoNode:
     return vsutil.depth(clip, 10)
