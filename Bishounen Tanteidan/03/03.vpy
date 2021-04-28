@@ -63,6 +63,9 @@ SIGNS_RU: List[HardsubMask] = [
 ]
 
 AA_STRONG: List[Range] = [
+    (19884, 19949),
+    (19992, 20033),
+    (20553, 20693),
     (20892, 20933),
     (20994, 21041),
 ]
@@ -71,6 +74,7 @@ AA_WEAK: List[Range] = TITLECARDS + [
 ]
 
 AA_NONE: List[Range] = [
+    (17894, 17959),
 ]
 
 
@@ -80,7 +84,7 @@ def filter_basic() -> vs.VideoNode:
     waka = wakas[0]
     waka, wakas = waka_replace(waka, wakas[1:], WAKA_REPLACE)
     src = bounded_dehardsub(waka, ref, SIGNS_RU, wakas)
-    src.set_output(2)
+    src.set_output(1)
     return src
 
 
