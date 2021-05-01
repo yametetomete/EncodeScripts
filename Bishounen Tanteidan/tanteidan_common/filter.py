@@ -10,10 +10,9 @@ from lvsfunc.kernels import Bicubic
 from lvsfunc.mask import detail_mask
 from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
-from mvsfunc import BM3D
 from vardefunc import dumb3kdb
 
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional
 
 from yt_common.antialiasing import combine_mask, sraa_clamp
 from yt_common.deband import morpho_mask
@@ -24,9 +23,8 @@ from .scenefilter import get_op_scenefilters
 core = vs.core
 
 
-def denoise(clip: vs.VideoNode, sigma: Union[float, Sequence[float]] = 0.75) -> vs.VideoNode:
-    den: vs.VideoNode = BM3D(clip, sigma=sigma)
-    return den
+def denoise(clip: vs.VideoNode, h: float = 0.4) -> vs.VideoNode:
+    return clip.knlm.KNLMeansCL(d=3, a=1, h=h)
 
 
 def deband(clip: vs.VideoNode) -> vs.VideoNode:

@@ -6,7 +6,6 @@ import vardefunc as vdf
 from awsmfunc import bbmod
 from debandshit import f3kbilateral
 from lvsfunc.types import Range
-from mvsfunc import BM3D
 from typing import List, Optional
 
 from yt_common import antialiasing
@@ -40,9 +39,8 @@ def letterbox_edgefix(clip: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
     return lvf.misc.replace_ranges(clip, edgefix, ranges)
 
 
-def denoise(clip: vs.VideoNode, sigma: float = 1.5) -> vs.VideoNode:
-    bm3d: vs.VideoNode = BM3D(clip, sigma=sigma, depth=16)
-    return bm3d
+def denoise(clip: vs.VideoNode, h: float = 0.4) -> vs.VideoNode:
+    return clip.knlm.KNLMeansCL(d=3, a=1, h=h)
 
 
 def deband(clip: vs.VideoNode) -> vs.VideoNode:
