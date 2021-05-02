@@ -5,10 +5,14 @@ import vardefunc as vdf
 
 from awsmfunc import bbmod
 from debandshit import f3kbilateral
+from lvsfunc.aa import upscaled_sraa
+from lvsfunc.kernels import Bicubic
+from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from yt_common import antialiasing
+from yt_common.denoise import bm3d
 from yt_common.deband import morpho_mask
 
 import os
@@ -39,8 +43,8 @@ def letterbox_edgefix(clip: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
     return lvf.misc.replace_ranges(clip, edgefix, ranges)
 
 
-def denoise(clip: vs.VideoNode, h: float = 0.4) -> vs.VideoNode:
-    return clip.knlm.KNLMeansCL(d=3, a=1, h=h)
+def denoise(clip: vs.VideoNode, sigma: Union[float, List[float]] = 0.75) -> vs.VideoNode:
+    return bm3d(clip, sigma=sigma)
 
 
 def deband(clip: vs.VideoNode) -> vs.VideoNode:
@@ -58,9 +62,12 @@ def deband(clip: vs.VideoNode) -> vs.VideoNode:
     return deband
 
 
-def antialias(clip: vs.VideoNode, noaa: Optional[List[Range]] = None) -> vs.VideoNode:
-    clamp = antialiasing.sraa_clamp(clip, mask=antialiasing.mask_strong(clip))
-    return lvf.misc.replace_ranges(clamp, clip, noaa) if noaa else clamp
+def antialias(clip: vs.VideoNode, weak: Optional[List[Range]] = None, strong: Optional[List[Range]] = None,
+              noaa: Optional[List[Range]] = None) -> vs.VideoNode:
+    mask = antialiasing.combine_mask(clip, weak or [])
+    clamp = antialiasing.sraa_clamp(clip, mask=mask)
+    sraa = core.std.MaskedMerge(clip, upscaled_sraa(clip, rfactor=2, downscaler=Bicubic(b=0, c=1/2).scale), mask)
+    return replace_ranges(replace_ranges(clamp, clip, noaa or []), sraa, strong or [])
 
 
 def regrain(clip: vs.VideoNode) -> vs.VideoNode:

@@ -12,10 +12,11 @@ from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
 from vardefunc import dumb3kdb
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from yt_common.antialiasing import combine_mask, sraa_clamp
 from yt_common.deband import morpho_mask
+from yt_common.denoise import bm3d
 
 from .scenefilter import get_op_scenefilters
 
@@ -23,8 +24,8 @@ from .scenefilter import get_op_scenefilters
 core = vs.core
 
 
-def denoise(clip: vs.VideoNode, h: float = 0.4) -> vs.VideoNode:
-    return clip.knlm.KNLMeansCL(d=3, a=1, h=h)
+def denoise(clip: vs.VideoNode, sigma: Union[float, List[float]] = 0.75) -> vs.VideoNode:
+    return bm3d(clip, sigma=sigma)
 
 
 def deband(clip: vs.VideoNode) -> vs.VideoNode:
