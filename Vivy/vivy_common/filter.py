@@ -43,7 +43,7 @@ def letterbox_edgefix(clip: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
     return lvf.misc.replace_ranges(clip, edgefix, ranges)
 
 
-def denoise(clip: vs.VideoNode, sigma: Union[float, List[float]] = 0.75) -> vs.VideoNode:
+def denoise(clip: vs.VideoNode, sigma: Union[float, List[float]] = 1.5) -> vs.VideoNode:
     return bm3d(clip, sigma=sigma)
 
 
@@ -51,11 +51,11 @@ def deband(clip: vs.VideoNode) -> vs.VideoNode:
     grad_mask, yrangebig = morpho_mask(clip.dfttest.DFTTest(sigma=14, sigma2=10, sbsize=1, sosize=0)
                                        .rgvs.RemoveGrain(3))
     y = vsutil.get_y(clip)
-    mask = lvf.mask.detail_mask(clip)
-    deband_dumb: vs.VideoNode = vdf.dumb3kdb(clip)
+    mask = lvf.mask.detail_mask(clip, brz_b=0.03)
+    deband_dumb: vs.VideoNode = vdf.dumb3kdb(clip, radius=16, threshold=24)
     deband_weak: vs.VideoNode = core.std.MaskedMerge(vsutil.get_y(deband_dumb), y, mask)
-    deband_norm: vs.VideoNode = f3kbilateral(y, y=36)
-    deband_strong: vs.VideoNode = f3kbilateral(y, y=65)
+    deband_norm: vs.VideoNode = vsutil.get_y(vdf.dumb3kdb(clip, radius=16, threshold=30))
+    deband_strong: vs.VideoNode = f3kbilateral(y, range=12, y=50)
     deband = core.std.MaskedMerge(deband_strong, deband_norm, grad_mask)
     deband = core.std.MaskedMerge(deband, deband_weak, yrangebig)
     deband = core.std.ShufflePlanes([deband, deband_dumb], planes=[0, 1, 2], colorfamily=vs.YUV)
@@ -63,11 +63,13 @@ def deband(clip: vs.VideoNode) -> vs.VideoNode:
 
 
 def antialias(clip: vs.VideoNode, weak: Optional[List[Range]] = None, strong: Optional[List[Range]] = None,
-              noaa: Optional[List[Range]] = None) -> vs.VideoNode:
+              stronger: Optional[List[Range]] = None, noaa: Optional[List[Range]] = None) -> vs.VideoNode:
     mask = antialiasing.combine_mask(clip, weak or [])
     clamp = antialiasing.sraa_clamp(clip, mask=mask)
     sraa = core.std.MaskedMerge(clip, upscaled_sraa(clip, rfactor=2, downscaler=Bicubic(b=0, c=1/2).scale), mask)
-    return replace_ranges(replace_ranges(clamp, clip, noaa or []), sraa, strong or [])
+    sraa_13 = core.std.MaskedMerge(clip, upscaled_sraa(clip, rfactor=1.3, downscaler=Bicubic(b=0, c=1/2).scale), mask)
+    return replace_ranges(replace_ranges(replace_ranges(clamp, clip, noaa or []), sraa, strong or []), sraa_13,
+                          stronger or [])
 
 
 def regrain(clip: vs.VideoNode) -> vs.VideoNode:

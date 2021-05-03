@@ -9,7 +9,7 @@ import glob
 import os
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from .config import Config
 from .logging import log
@@ -26,8 +26,6 @@ def waka_replace(src: vs.VideoNode, wakas: List[vs.VideoNode], ranges: List[List
                  ) -> Tuple[vs.VideoNode, List[vs.VideoNode]]:
     if len(wakas) == 0:
         return src, wakas
-    if len(ranges) != len(wakas):
-        raise ValueError("waka_replace: 'Different number of range sets and wakas supplied'!")
     new_wakas = []
     for waka, r in zip(wakas, ranges):
         tmp = src
@@ -59,13 +57,23 @@ class DehardsubFileFinder(ABC):
         pass
 
     def source(self) -> Tuple[List[vs.VideoNode], vs.VideoNode]:
-        wakas = [vsutil.depth(core.ffms2.Source(self.config.format_filename(f)), 16)
-                 for f in self.get_waka_filenames()]
+        wakas: List[vs.VideoNode] = []
+        for f in [self.config.format_filename(f) for f in self.get_waka_filenames()]:
+            if not os.path.isfile(f):
+                log.warn("Missing a waka!")
+                continue
+            wakas.append(vsutil.depth(core.ffms2.Source(f), 16))
         ref = vsutil.depth(self.get_ref(), 16)
         return wakas, ref
 
 
 class FunimationSource(DehardsubFileFinder):
+    ref_is_funi: bool
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.ref_is_funi = False
+        super().__init__(*args, **kwargs)
+
     def get_amazon(self) -> vs.VideoNode:
         if not os.path.isfile(self.config.format_filename(AMAZON_FILENAME)):
             log.warn("Amazon not found, falling back to Funimation")
@@ -92,4 +100,5 @@ class FunimationSource(DehardsubFileFinder):
         try:
             return self.get_amazon()
         except FileNotFoundError:
+            self.ref_is_funi = True
             return self.get_funi()
