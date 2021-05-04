@@ -46,9 +46,9 @@ def deband(clip: vs.VideoNode) -> vs.VideoNode:
     return deband
 
 
-def antialias(clip: vs.VideoNode, strong: Optional[List[Range]] = None,
-              weak: Optional[List[Range]] = None, noaa: Optional[List[Range]] = None,
-              dehalo: bool = True, sharpen: bool = False) -> vs.VideoNode:
+def antialias(clip: vs.VideoNode, stronger: Optional[List[Range]] = None,
+              strong: Optional[List[Range]] = None, weak: Optional[List[Range]] = None,
+              noaa: Optional[List[Range]] = None, dehalo: bool = True, sharpen: bool = False) -> vs.VideoNode:
     def _sraa_pp_sharpdehalo(sraa: vs.VideoNode) -> vs.VideoNode:
         if sharpen:  # all this really seems to do is make the haloing worse, will not be using!
             y = LSFmod(vsutil.get_y(sraa), strength=70, Smode=3, edgemode=0, source=vsutil.get_y(clip))
@@ -58,7 +58,9 @@ def antialias(clip: vs.VideoNode, strong: Optional[List[Range]] = None,
     mask = combine_mask(clip, weak or [])
     clamp = sraa_clamp(clip, mask=mask, postprocess=_sraa_pp_sharpdehalo)
     sraa = core.std.MaskedMerge(clip, upscaled_sraa(clip, rfactor=2, downscaler=Bicubic(b=0, c=1/2).scale), mask)
-    return replace_ranges(replace_ranges(clamp, clip, noaa or []), sraa, strong or [])
+    sraa13 = upscaled_sraa(clip, rfactor=1.3, downscaler=Bicubic(b=0, c=1/2).scale)
+    return replace_ranges(replace_ranges(replace_ranges(clamp, clip, noaa or []), sraa, strong or []), sraa13,
+                          stronger or [])
 
 
 def regrain(clip: vs.VideoNode) -> vs.VideoNode:
