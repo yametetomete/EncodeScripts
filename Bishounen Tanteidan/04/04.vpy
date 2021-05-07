@@ -5,11 +5,13 @@ from tanteidan_common import (PrettyConfig, PrettySource, antialias, deband,
                               wd_scenefilter)
 
 from yt_common.automation import SelfRunner
+from yt_common.denoise import bm3d
 from yt_common.source import waka_replace
 
 from typing import List, Optional
 
 from lvsfunc.dehardsub import HardsubSign, HardsubSignFade, HardsubMask, bounded_dehardsub
+from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
 
 import os
@@ -86,6 +88,11 @@ AA_NONE: List[Range] = TITLECARDS + [  # chapter 2 title cards are insanely deta
     (20821, 21039),
 ]
 
+STUPID_DENOISE: List[Range] = [
+    (11435, 11626),
+    (12026, 12115),
+]
+
 
 def filter_basic() -> vs.VideoNode:
     wakas, ref = SOURCE.source()
@@ -101,6 +108,7 @@ def filter() -> vs.VideoNode:
     src = filter_basic()
     den = denoise(src)
     deb = deband(den)
+    deb = replace_ranges(deb, bm3d(src, sigma=4, radius=1), STUPID_DENOISE)
     aa = antialias(deb, stronger=AA_STRONGER, strong=AA_STRONG, weak=AA_WEAK, noaa=AA_NONE)
     scenefilter = stupid_op_scenefilter(aa, deb, OP)
     if WELCOMING_DAYS is not None:

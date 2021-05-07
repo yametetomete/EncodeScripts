@@ -22,12 +22,12 @@ def bm3d(clip: vs.VideoNode, matrix_s: str = "709", sigma: Union[float, List[flo
     def to_fullgray(clip: vs.VideoNode) -> vs.VideoNode:
         return get_y(clip).resize.Point(format=vs.GRAYS, range_in=Range.LIMITED, range=Range.FULL)
 
-    sigmal = [sigma] * 3 if isinstance(sigma, float) else sigma + [sigma[-1]]*(3-len(sigma))
+    sigmal = [sigma] * 3 if not isinstance(sigma, list) else sigma + [sigma[-1]]*(3-len(sigma))
     sigmal = [sigmal[0], 0, 0] if isGray else sigmal
     isGray = True if sigmal[1] == 0 and sigmal[2] == 0 else isGray
     if len(sigmal) != 3:
         raise ValueError("bm3d: 'invalid number of sigma parameters supplied'")
-    radiusl = [0, 0] if radius is None else [radius] * 2 if isinstance(radius, int) \
+    radiusl = [0, 0] if radius is None else [radius] * 2 if not isinstance(radius, list) \
         else radius + [radius[-1]]*(2-len(radius))
     if len(radiusl) != 2:
         raise ValueError("bm3d: 'invalid number or radius parameters supplied'")
