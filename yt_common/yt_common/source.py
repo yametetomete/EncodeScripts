@@ -19,7 +19,8 @@ core = vs.core
 SUBSPLS_FILENAME: str = "[SubsPlease] {title_long} - {epnum:02d} ({resolution}p) [$GLOB].mkv"
 ER_FILENAME: str = "[Erai-raws] {title_long} - {epnum:02d} [v0][{resolution}p]$GLOB.mkv"
 FUNI_INTRO: int = 289
-AMAZON_FILENAME: str = "{title_long} - {epnum:02d} (Amazon Prime CBR {resolution}p).mkv"
+AMAZON_FILENAME_CBR: str = "{title_long} - {epnum:02d} (Amazon Prime CBR {resolution}p).mkv"
+AMAZON_FILENAME_VBR: str = "{title_long} - {epnum:02d} (Amazon Prime VBR {resolution}p).mkv"
 
 
 def waka_replace(src: vs.VideoNode, wakas: List[vs.VideoNode], ranges: List[List[Range]]
@@ -75,11 +76,11 @@ class FunimationSource(DehardsubFileFinder):
         super().__init__(*args, **kwargs)
 
     def get_amazon(self) -> vs.VideoNode:
-        if not os.path.isfile(self.config.format_filename(AMAZON_FILENAME)):
+        if not os.path.isfile(self.config.format_filename(AMAZON_FILENAME_CBR)):
             log.warn("Amazon not found, falling back to Funimation")
             raise FileNotFoundError()
         log.success("Found Amazon video")
-        return core.ffms2.Source(self.config.format_filename(AMAZON_FILENAME))
+        return core.ffms2.Source(self.config.format_filename(AMAZON_FILENAME_CBR))
 
     def get_funi_filename(self) -> str:
         try:

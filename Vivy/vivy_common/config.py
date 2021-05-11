@@ -1,8 +1,9 @@
 import vapoursynth as vs
 
 from yt_common import source
-from yt_common.logging import log
 from yt_common.config import Config
+from yt_common.logging import log
+from yt_common.source import AMAZON_FILENAME_VBR
 
 import os
 
@@ -38,11 +39,11 @@ class VivySource(source.FunimationSource):
         # ep1-3 have good funi video, let's just use that
         if self.config.epnum < 4:
             raise FileNotFoundError()
-        if not os.path.isfile(self.config.format_filename(AMAZON_FILENAME)):
+        if not os.path.isfile(self.config.format_filename(AMAZON_FILENAME_VBR)):
             log.warn("Amazon not found, falling back to Funimation")
             raise FileNotFoundError()
         log.success("Found Amazon video")
-        return core.ffms2.Source(self.config.format_filename(AMAZON_FILENAME))
+        return core.ffms2.Source(self.config.format_filename(AMAZON_FILENAME_VBR))
 
     def get_waka_filenames(self) -> List[str]:
         return [self.config.format_filename(f) for f in [

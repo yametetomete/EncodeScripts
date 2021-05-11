@@ -12,7 +12,7 @@ from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Union, cas
 
 from .config import Config
 from .logging import log
-from .source import AMAZON_FILENAME, ER_FILENAME, SUBSPLS_FILENAME, FUNI_INTRO, glob_filename
+from .source import AMAZON_FILENAME_CBR, AMAZON_FILENAME_VBR, ER_FILENAME, SUBSPLS_FILENAME, FUNI_INTRO, glob_filename
 
 core = vs.core
 
@@ -135,8 +135,14 @@ class AudioGetter():
             return
 
         # look for amazon first
-        if os.path.isfile(self.config.format_filename(AMAZON_FILENAME)):
-            self.audio_file = self.config.format_filename(AMAZON_FILENAME)
+        if os.path.isfile(self.config.format_filename(AMAZON_FILENAME_CBR)):
+            self.audio_file = self.config.format_filename(AMAZON_FILENAME_CBR)
+            self.video_src = core.ffms2.Source(self.audio_file)
+            log.success("Found Amazon audio")
+            return
+
+        if os.path.isfile(self.config.format_filename(AMAZON_FILENAME_VBR)):
+            self.audio_file = self.config.format_filename(AMAZON_FILENAME_VBR)
             self.video_src = core.ffms2.Source(self.audio_file)
             log.success("Found Amazon audio")
             return
