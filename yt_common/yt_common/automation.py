@@ -128,7 +128,7 @@ class AudioGetter():
         trims = self.src.get_audio()
         if not trims or len(trims) > 1:
             raise NotImplementedError("Please implement multifile trimming")
-        audio_cut = acsuite.eztrim(trims[0].path, cast(acsuite.types.Trim, trims[0].trim))[0]
+        audio_cut = acsuite.eztrim(trims[0].path, cast(acsuite.types.Trim, trims[0].trim), streams=0)[0]
         self.cleanup.append(audio_cut)
 
         if ftrim:
