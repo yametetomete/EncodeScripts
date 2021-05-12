@@ -35,9 +35,9 @@ def combine_mask(clip: vs.VideoNode, weak: Union[Range, List[Range], None] = Non
 
 
 def sraa_clamp(clip: vs.VideoNode, mask: Optional[vs.VideoNode] = None,
-               strength: float = 2, opencl: bool = False,
+               strength: float = 2, opencl: bool = True,
                postprocess: Optional[Callable[[vs.VideoNode], vs.VideoNode]] = None) -> vs.VideoNode:
-    sraa = upscaled_sraa(clip, rfactor=1.3, opencl=opencl, downscaler=Bicubic(b=0, c=1/2).scale)
+    sraa = upscaled_sraa(clip, rfactor=1.3, nnedi3cl=opencl, downscaler=Bicubic(b=0, c=1/2).scale)
     sraa = postprocess(sraa) if postprocess else sraa
     clamp = clamp_aa(clip, nnedi3(clip, opencl=opencl), sraa, strength=strength)
     return core.std.MaskedMerge(clip, clamp, mask, planes=0) if mask else clamp

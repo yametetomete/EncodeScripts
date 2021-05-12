@@ -50,7 +50,7 @@ LETTERBOX: List[Range] = [
 
 
 def filter_basic() -> vs.VideoNode:
-    wakas, ref = SOURCE.source()
+    wakas, ref = SOURCE.dhs_source()
     wakas = [waka[:37301] + core.std.BlankClip(waka, length=6) + waka[37301:] for waka in wakas]
     waka = wakas[0]
     waka, wakas = waka_replace(waka, wakas[1:], WAKA_REPLACE)
@@ -71,6 +71,6 @@ def filter() -> vs.VideoNode:
 
 
 if __name__ == "__main__":
-    SelfRunner(CONFIG, filter, filter_basic)
+    SelfRunner(CONFIG, SOURCE, filter, filter_basic)
 else:
     filter()

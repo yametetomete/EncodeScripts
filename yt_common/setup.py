@@ -19,7 +19,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     package_data={
-        'yt_common': ['py.typed'],
+        'yt_common': ['py.typed', 'shaders/FSRCNNX_x2_56-16-4-1.glsl'],
     },
     python_requires='>=3.8',
 )

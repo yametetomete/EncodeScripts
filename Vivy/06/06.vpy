@@ -110,7 +110,7 @@ LETTERBOX: List[Range] = [(0, 2150), (8791, 10693), (13427, 15153), (27878, 2800
 
 
 def filter_basic() -> vs.VideoNode:
-    wakas, ref = SOURCE.source()
+    wakas, ref = SOURCE.dhs_source()
     wakas = [w[:33669] + w.std.BlankClip(length=17) + w[33669:] for w in wakas]
     ref = ref.resize.Point(range_in=CRange.FULL, range=CRange.LIMITED) if SOURCE.ref_is_funi else ref
     waka = wakas[0]
@@ -134,6 +134,6 @@ def filter() -> vs.VideoNode:
 
 
 if __name__ == "__main__":
-    SelfRunner(CONFIG, filter, filter_basic)
+    SelfRunner(CONFIG, SOURCE, filter, filter_basic)
 else:
     filter()

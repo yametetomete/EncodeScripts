@@ -91,7 +91,7 @@ LETTERBOX: List[Range] = []
 
 
 def filter_basic() -> vs.VideoNode:
-    wakas, ref = SOURCE.source()
+    wakas, ref = SOURCE.dhs_source()
     waka = wakas[0]
     waka, wakas = waka_replace(waka, wakas[1:], WAKA_REPLACE)
     src = bounded_dehardsub(waka, ref, SIGNS_RU, wakas)
@@ -116,6 +116,6 @@ def filter() -> vs.VideoNode:
 
 
 if __name__ == "__main__":
-    SelfRunner(CONFIG, filter, filter_basic)
+    SelfRunner(CONFIG, SOURCE, filter, filter_basic)
 else:
     filter()

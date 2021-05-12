@@ -12,15 +12,13 @@ from lvsfunc.types import Range
 from typing import List, Optional, Union
 
 from yt_common import antialiasing
+from yt_common.data import FSRCNNX
 from yt_common.denoise import bm3d
 from yt_common.deband import morpho_mask
 
-import os
 import vsutil
 
 core = vs.core
-
-FSRCNNX = os.path.join(os.path.dirname(__file__), "shaders/FSRCNNX_x2_56-16-4-1.glsl")
 
 
 def fsrcnnx_rescale(src: vs.VideoNode, noscale: Optional[List[Range]] = None,

@@ -14,8 +14,6 @@ from typing import List
 import os
 
 core = vs.core
-core.num_threads = 16
-
 
 EPNUM: int = int(os.path.basename(os.path.splitext(__file__)[0]))
 CONFIG: VivyConfig = VivyConfig(EPNUM)
@@ -39,7 +37,7 @@ LETTERBOX: List[Range] = [(0, 1151)]
 
 
 def filter_basic() -> vs.VideoNode:
-    wakas, ref = SOURCE.source()
+    wakas, ref = SOURCE.dhs_source()
     wakas = [w[:33665] + core.std.BlankClip(w, length=21) + w[33665:] for w in wakas]
     waka = wakas[0]
     waka, wakas = waka_replace(waka, wakas[1:], WAKA_REPLACE)
@@ -62,6 +60,6 @@ def filter() -> vs.VideoNode:
 
 
 if __name__ == "__main__":
-    SelfRunner(CONFIG, filter, filter_basic)
+    SelfRunner(CONFIG, SOURCE, filter, filter_basic)
 else:
     filter()

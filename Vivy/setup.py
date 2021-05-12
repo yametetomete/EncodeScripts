@@ -19,7 +19,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     package_data={
-        'vivy_common': ['py.typed', 'workraw-settings', 'final-settings', 'shaders/FSRCNNX_x2_56-16-4-1.glsl'],
+        'vivy_common': ['py.typed', 'workraw-settings', 'final-settings'],
     },
     python_requires='>=3.8',
 )

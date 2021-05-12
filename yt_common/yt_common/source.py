@@ -1,15 +1,16 @@
 import vapoursynth as vs
 
-import vsutil
+from acsuite.types import Trim
 
+from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
-import lvsfunc as lvf
+from vsutil import depth
 
 import glob
 import os
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Tuple
+from typing import Any, List, NamedTuple, Optional, Tuple, Union
 
 from .config import Config
 from .logging import log
@@ -23,6 +24,23 @@ AMAZON_FILENAME_CBR: str = "{title_long} - {epnum:02d} (Amazon Prime CBR {resolu
 AMAZON_FILENAME_VBR: str = "{title_long} - {epnum:02d} (Amazon Prime VBR {resolution}p).mkv"
 
 
+class FileTrim(NamedTuple):
+    path: str
+    trim: Optional[Trim]
+
+    def apply_trim(self, clip: vs.VideoNode) -> vs.VideoNode:
+        if self.trim is None:
+            return clip
+        s, e = self.trim
+        if s is None and e is None:
+            return clip
+        if s is None:
+            return clip[:e]
+        if e is None:
+            return clip[s:]
+        return clip[s:e]
+
+
 def waka_replace(src: vs.VideoNode, wakas: List[vs.VideoNode], ranges: List[List[Range]]
                  ) -> Tuple[vs.VideoNode, List[vs.VideoNode]]:
     if len(wakas) == 0:
@@ -30,8 +48,8 @@ def waka_replace(src: vs.VideoNode, wakas: List[vs.VideoNode], ranges: List[List
     new_wakas = []
     for waka, r in zip(wakas, ranges):
         tmp = src
-        src = lvf.misc.replace_ranges(src, waka, r)
-        new_wakas.append(lvf.misc.replace_ranges(waka, tmp, r))
+        src = replace_ranges(src, waka, r)
+        new_wakas.append(replace_ranges(waka, tmp, r))
 
     return src, new_wakas
 
@@ -43,7 +61,34 @@ def glob_filename(pattern: str) -> str:
     return res[0]
 
 
-class DehardsubFileFinder(ABC):
+class FileSource(ABC):
+    def _open(self, path: str) -> vs.VideoNode:
+        return depth(core.lsmas.LWLibavSource(path), 16) if path.lower().endswith(".m2ts") \
+            else depth(core.ffms2.Source(path), 16)
+
+    @abstractmethod
+    def get_audio(self) -> List[FileTrim]:
+        pass
+
+    @abstractmethod
+    def source(self) -> vs.VideoNode:
+        pass
+
+
+class SimpleSource(FileSource):
+    src: List[FileTrim]
+
+    def __init__(self, src: Union[FileTrim, List[FileTrim]]) -> None:
+        self.src = src if isinstance(src, list) else [src]
+
+    def get_audio(self) -> List[FileTrim]:
+        return self.src
+
+    def source(self) -> vs.VideoNode:
+        return depth(core.std.Splice([s.apply_trim(self._open(s.path)) for s in self.src]), 16)
+
+
+class DehardsubFileFinder(FileSource):
     config: Config
 
     def __init__(self, config: Config) -> None:
@@ -57,14 +102,17 @@ class DehardsubFileFinder(ABC):
     def get_ref(self) -> vs.VideoNode:
         pass
 
-    def source(self) -> Tuple[List[vs.VideoNode], vs.VideoNode]:
+    def source(self) -> vs.VideoNode:
+        return self.get_ref()
+
+    def dhs_source(self) -> Tuple[List[vs.VideoNode], vs.VideoNode]:
         wakas: List[vs.VideoNode] = []
         for f in [self.config.format_filename(f) for f in self.get_waka_filenames()]:
             if not os.path.isfile(f):
                 log.warn("Missing a waka!")
                 continue
-            wakas.append(vsutil.depth(core.ffms2.Source(f), 16))
-        ref = vsutil.depth(self.get_ref(), 16)
+            wakas.append(self._open(f))
+        ref = self.get_ref()
         return wakas, ref
 
 
@@ -75,12 +123,24 @@ class FunimationSource(DehardsubFileFinder):
         self.ref_is_funi = False
         super().__init__(*args, **kwargs)
 
+    def get_audio(self) -> List[FileTrim]:
+        if self.ref_is_funi:
+            return [FileTrim(self.get_funi_filename(), (FUNI_INTRO, None))]
+
+        if os.path.isfile(self.config.format_filename(AMAZON_FILENAME_CBR)):
+            return [FileTrim(self.config.format_filename(AMAZON_FILENAME_CBR), None)]
+
+        if os.path.isfile(self.config.format_filename(AMAZON_FILENAME_VBR)):
+            return [FileTrim(self.config.format_filename(AMAZON_FILENAME_VBR), None)]
+
+        raise FileNotFoundError("Failed to find audio that should exist!")
+
     def get_amazon(self) -> vs.VideoNode:
         if not os.path.isfile(self.config.format_filename(AMAZON_FILENAME_CBR)):
             log.warn("Amazon not found, falling back to Funimation")
             raise FileNotFoundError()
         log.success("Found Amazon video")
-        return core.ffms2.Source(self.config.format_filename(AMAZON_FILENAME_CBR))
+        return self._open(self.config.format_filename(AMAZON_FILENAME_CBR))
 
     def get_funi_filename(self) -> str:
         try:
@@ -95,7 +155,7 @@ class FunimationSource(DehardsubFileFinder):
             raise
 
     def get_funi(self) -> vs.VideoNode:
-        return core.ffms2.Source(self.get_funi_filename())[FUNI_INTRO:]
+        return self._open(self.get_funi_filename())[FUNI_INTRO:]
 
     def get_ref(self) -> vs.VideoNode:
         try:

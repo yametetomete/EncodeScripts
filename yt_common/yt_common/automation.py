@@ -8,16 +8,15 @@ import shutil
 import string
 import subprocess
 
-from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Union, cast
+from typing import Any, BinaryIO, Callable, List, Optional, Sequence, cast
 
 from .config import Config
 from .logging import log
-from .source import AMAZON_FILENAME_CBR, AMAZON_FILENAME_VBR, ER_FILENAME, SUBSPLS_FILENAME, FUNI_INTRO, glob_filename
+from .source import FileSource
 
 core = vs.core
 
-AUDIO_OVERRIDE: str = "audio.mka"
-AUDIO_CUT: str = "_audiogetter_cut.mka"
+AUDIO_ENCODE: str = "_audiogetter_encode.mka"
 
 
 def bin_to_plat(binary: str) -> str:
@@ -109,6 +108,7 @@ class AudioGetter():
     TODO: really should modularize this a bit instead of assuming amazon->funi
     """
     config: Config
+    src: FileSource
 
     audio_file: str
     audio_start: int
@@ -116,77 +116,41 @@ class AudioGetter():
 
     cleanup: List[str]
 
-    def __init__(self, config: Config, override: Optional[str] = None) -> None:
+    def __init__(self, config: Config, src: FileSource) -> None:
         self.config = config
+        self.src = src
 
         self.audio_start = 0
         self.video_src = None
         self.cleanup = []
 
-        if override is not None:
-            if os.path.isfile(override):
-                self.audio_file = override
-            else:
-                raise FileNotFoundError(f"Audio file {override} not found!")
+    def trim_audio(self, ftrim: Optional[acsuite.types.Trim] = None) -> str:
+        trims = self.src.get_audio()
+        if not trims or len(trims) > 1:
+            raise NotImplementedError("Please implement multifile trimming")
+        audio_cut = acsuite.eztrim(trims[0].path, cast(acsuite.types.Trim, trims[0].trim))[0]
+        self.cleanup.append(audio_cut)
 
-        # drop "audio.m4a" into the folder and it'll get used
-        if os.path.isfile(AUDIO_OVERRIDE):
-            self.audio_file = AUDIO_OVERRIDE
-            return
+        if ftrim:
+            audio_cut = acsuite.eztrim(audio_cut, ftrim, ref_clip=self.src.source())[0]
+            self.cleanup.append(audio_cut)
 
-        # look for amazon first
-        if os.path.isfile(self.config.format_filename(AMAZON_FILENAME_CBR)):
-            self.audio_file = self.config.format_filename(AMAZON_FILENAME_CBR)
-            self.video_src = core.ffms2.Source(self.audio_file)
-            log.success("Found Amazon audio")
-            return
+        return audio_cut
 
-        if os.path.isfile(self.config.format_filename(AMAZON_FILENAME_VBR)):
-            self.audio_file = self.config.format_filename(AMAZON_FILENAME_VBR)
-            self.video_src = core.ffms2.Source(self.audio_file)
-            log.success("Found Amazon audio")
-            return
+    def encode_audio(self, path: str, args: List[str]) -> str:
+        ffmpeg_args = [
+            "ffmpeg",
+            "-hide_banner", "-loglevel", "panic",
+            "-i", path,
+            "-y",
+            "-map", "0:a",
+        ] + args + [AUDIO_ENCODE]
+        print("+ " + " ".join(ffmpeg_args))
+        subprocess.call(ffmpeg_args)
 
-        try:
-            self.audio_file = glob_filename(self.config.format_filename(SUBSPLS_FILENAME))
-            self.video_src = core.ffms2.Source(self.audio_file)
-        except FileNotFoundError:
-            pass
-        try:
-            self.audio_file = glob_filename(self.config.format_filename(ER_FILENAME))
-            self.video_src = core.ffms2.Source(self.audio_file)
-        except FileNotFoundError:
-            log.error("Could not find audio")
-            raise
+        self.cleanup.append(AUDIO_ENCODE)
 
-        self.audio_start = FUNI_INTRO
-        log.warn("No Amazon audio, falling back to Funi")
-
-    def trim_audio(self, src: vs.VideoNode,
-                   trims: Union[acsuite.Trim, List[acsuite.Trim], None] = None) -> str:
-        if isinstance(trims, tuple):
-            trims = [trims]
-
-        if trims is None or len(trims) == 0:
-            if self.audio_start == 0:
-                trims = [(None, None)]
-            else:
-                trims = [(self.audio_start, None)]
-        else:
-            if self.audio_start != 0:
-                trims = [(s+self.audio_start if s is not None and s >= 0 else s,
-                          e+self.audio_start if e is not None and e > 0 else e)
-                         for s, e in trims]
-
-        if os.path.isfile(AUDIO_CUT):
-            os.remove(AUDIO_CUT)
-
-        acsuite.eztrim(self.video_src if self.video_src else src, trims,
-                       self.audio_file, AUDIO_CUT, quiet=True)
-
-        self.cleanup.append(AUDIO_CUT)
-
-        return AUDIO_CUT
+        return AUDIO_ENCODE
 
     def do_cleanup(self) -> None:
         for f in self.cleanup:
@@ -196,6 +160,7 @@ class AudioGetter():
 
 class SelfRunner():
     config: Config
+    src: FileSource
     clip: vs.VideoNode
 
     workraw: bool
@@ -208,9 +173,11 @@ class SelfRunner():
 
     profile: str
 
-    def __init__(self, config: Config, final_filter: Callable[[], vs.VideoNode],
-                 workraw_filter: Optional[Callable[[], vs.VideoNode]] = None) -> None:
+    def __init__(self, config: Config, source: FileSource, final_filter: Callable[[], vs.VideoNode],
+                 workraw_filter: Optional[Callable[[], vs.VideoNode]] = None,
+                 audio_codec: Optional[List[str]] = None) -> None:
         self.config = config
+        self.src = source
         self.video_clean = False
         self.audio_clean = False
 
@@ -222,7 +189,6 @@ class SelfRunner():
         parser.add_argument("-k", "--keep", help="Keep raw video", action="store_true")
         parser.add_argument("-b", "--encoder", type=str, help="Override detected encoder binary.")
         parser.add_argument("-f", "--force", help="Overwrite existing intermediaries.", action="store_true")
-        parser.add_argument("-a", "--audio", type=str, help="Force audio file")
         parser.add_argument("-x", "--suffix", type=str, help="Change the suffix of the mux. \
                             Will be overridden by PROFILE if set.")
         parser.add_argument("-p", "--profile", type=str, help="Set the encoder profile. \
@@ -283,10 +249,13 @@ class SelfRunner():
                                               start, end)
 
         log.status("--- LOOKING FOR AUDIO ---")
-        self.audio = AudioGetter(self.config, args.audio)
+        self.audio = AudioGetter(self.config, self.src)
 
         log.status("--- TRIMMING AUDIO ---")
-        self.audio_file = self.audio.trim_audio(self.clip, (start, end))
+        self.audio_file = self.audio.trim_audio((start, end))
+        if audio_codec:
+            log.status("--- TRANSCODING AUDIO ---")
+            self.audio_file = self.audio.encode_audio(self.audio_file, audio_codec)
 
         try:
             log.status("--- MUXING FILE ---")
