@@ -103,24 +103,13 @@ class Encoder():
 
 
 class AudioGetter():
-    """
-    TODO: really should modularize this a bit instead of assuming amazon->funi
-    """
     config: Config
     src: FileSource
-
-    audio_file: str
-    audio_start: int
-    video_src: Optional[vs.VideoNode]
-
     cleanup: List[str]
 
     def __init__(self, config: Config, src: FileSource) -> None:
         self.config = config
         self.src = src
-
-        self.audio_start = 0
-        self.video_src = None
         self.cleanup = []
 
     def trim_audio(self, ftrim: Optional[acsuite.types.Trim] = None) -> str:
@@ -136,14 +125,14 @@ class AudioGetter():
 
         return audio_cut
 
-    def encode_audio(self, path: str, args: List[str]) -> str:
+    def encode_audio(self, path: str, codec_args: List[str]) -> str:
         ffmpeg_args = [
             "ffmpeg",
             "-hide_banner", "-loglevel", "panic",
             "-i", path,
             "-y",
             "-map", "0:a",
-        ] + args + [AUDIO_ENCODE]
+        ] + codec_args + [AUDIO_ENCODE]
         print("+ " + " ".join(ffmpeg_args))
         subprocess.call(ffmpeg_args)
 
@@ -232,6 +221,7 @@ class SelfRunner():
             out_name += ".mka"
             self._do_audio(start, end, audio_codec, out_name=out_name)
             self.audio.do_cleanup()
+            log.success("--- AUDIO ENCODE COMPLETE ---")
             return
 
         out_name += ".mkv"
