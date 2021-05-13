@@ -195,6 +195,7 @@ class SelfRunner():
         parser.add_argument("-c", "--comparison", help="Output a comparison between workraw and final. \
                             Will search for the output file to include in comparison, if present.",
                             action="store_true")
+        parser.add_argument("-a", "--audio-only", help="Only process audio, no video.", action="store_true")
         args = parser.parse_args()
 
         self.workraw = args.workraw if workraw_filter else False
@@ -225,7 +226,15 @@ class SelfRunner():
         if start >= end:
             raise ValueError("Start frame must be before end frame!")
 
-        out_name = f"{self.config.title.lower()}_{self.config.desc}_{self.suffix}.mkv"
+        out_name = f"{self.config.title.lower()}_{self.config.desc}_{self.suffix}"
+
+        if args.audio_only:
+            out_name += ".mka"
+            self._do_audio(start, end, audio_codec, out_name=out_name)
+            self.audio.do_cleanup()
+            return
+
+        out_name += ".mkv"
 
         if args.comparison and workraw_filter:
             log.status("Generating comparison...")
@@ -247,18 +256,11 @@ class SelfRunner():
         self.video_file = self.encoder.encode(self.clip, f"{self.config.desc}_{self.suffix}_{start}_{end}",
                                               start, end)
 
-        log.status("--- LOOKING FOR AUDIO ---")
-        self.audio = AudioGetter(self.config, self.src)
-
-        log.status("--- TRIMMING AUDIO ---")
-        self.audio_file = self.audio.trim_audio((start, end))
-        if audio_codec:
-            log.status("--- TRANSCODING AUDIO ---")
-            self.audio_file = self.audio.encode_audio(self.audio_file, audio_codec)
+        self._do_audio(start, end, audio_codec)
 
         try:
             log.status("--- MUXING FILE ---")
-            if self._mux(out_name, start == 0 and end == self.clip.num_frames) != 0:
+            if self._do_mux(out_name, start == 0 and end == self.clip.num_frames) != 0:
                 raise Exception("mkvmerge failed")
         except Exception:
             log.error("--- MUXING FAILED ---")
@@ -274,7 +276,20 @@ class SelfRunner():
 
         log.success("--- ENCODE COMPLETE ---")
 
-    def _mux(self, name: str, chapters: bool = True) -> int:
+    def _do_audio(self, start: int, end: int, codec: Optional[List[str]], out_name: Optional[str] = None) -> None:
+        log.status("--- LOOKING FOR AUDIO ---")
+        self.audio = AudioGetter(self.config, self.src)
+
+        log.status("--- TRIMMING AUDIO ---")
+        self.audio_file = self.audio.trim_audio((start, end))
+        if codec:
+            log.status("--- TRANSCODING AUDIO ---")
+            self.audio_file = self.audio.encode_audio(self.audio_file, codec)
+        if out_name:
+            shutil.copy(self.audio_file, out_name)
+            self.audio_file = out_name
+
+    def _do_mux(self, name: str, chapters: bool = True) -> int:
         mkvtoolnix_args = [
             "mkvmerge",
             "--output", name,
