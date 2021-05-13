@@ -17,11 +17,11 @@ from .logging import log
 
 core = vs.core
 
-SUBSPLS_FILENAME: str = "[SubsPlease] {title_long} - {epnum:02d} ({resolution}p) [$GLOB].mkv"
-ER_FILENAME: str = "[Erai-raws] {title_long} - {epnum:02d} [v0][{resolution}p]$GLOB.mkv"
+SUBSPLS_FILENAME: str = "[SubsPlease] {title_long} - {epnum} ({resolution}p) [$GLOB].mkv"
+ER_FILENAME: str = "[Erai-raws] {title_long} - {epnum} [v0][{resolution}p]$GLOB.mkv"
 FUNI_INTRO: int = 289
-AMAZON_FILENAME_CBR: str = "{title_long} - {epnum:02d} (Amazon Prime CBR {resolution}p).mkv"
-AMAZON_FILENAME_VBR: str = "{title_long} - {epnum:02d} (Amazon Prime VBR {resolution}p).mkv"
+AMAZON_FILENAME_CBR: str = "{title_long} - {epnum} (Amazon Prime CBR {resolution}p).mkv"
+AMAZON_FILENAME_VBR: str = "{title_long} - {epnum} (Amazon Prime VBR {resolution}p).mkv"
 
 
 class FileTrim(NamedTuple):

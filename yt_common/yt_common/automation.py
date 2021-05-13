@@ -42,8 +42,7 @@ class Encoder():
 
     cleanup: List[str]
 
-    def __init__(self, epnum: int, settings_path: str,
-                 binary: Optional[str] = None, force: bool = False) -> None:
+    def __init__(self, settings_path: str, binary: Optional[str] = None, force: bool = False) -> None:
         self.binary = binary if binary is not None else ""
         self.force = force
         self.cleanup = []
@@ -181,7 +180,7 @@ class SelfRunner():
         self.video_clean = False
         self.audio_clean = False
 
-        parser = argparse.ArgumentParser(description=f"Encode {self.config.title} Episode {self.config.epnum:02d}")
+        parser = argparse.ArgumentParser(description=f"Encode {self.config.title} {self.config.desc}")
         if workraw_filter:
             parser.add_argument("-w", "--workraw", help="Encode workraw, fast x264.", action="store_true")
         parser.add_argument("-s", "--start", nargs='?', type=int, help="Start encode at frame START.")
@@ -226,7 +225,7 @@ class SelfRunner():
         if start >= end:
             raise ValueError("Start frame must be before end frame!")
 
-        out_name = f"{self.config.title.lower()}_{self.config.epnum:02d}_{self.suffix}.mkv"
+        out_name = f"{self.config.title.lower()}_{self.config.desc}_{self.suffix}.mkv"
 
         if args.comparison and workraw_filter:
             log.status("Generating comparison...")
@@ -244,8 +243,8 @@ class SelfRunner():
         if not os.path.isfile(settings_path):
             raise FileNotFoundError(f"Failed to find {settings_path}!")
 
-        self.encoder = Encoder(self.config.epnum, settings_path, args.encoder, args.force)
-        self.video_file = self.encoder.encode(self.clip, f"{self.config.epnum:02d}_{self.suffix}_{start}_{end}",
+        self.encoder = Encoder(settings_path, args.encoder, args.force)
+        self.video_file = self.encoder.encode(self.clip, f"{self.config.desc}_{self.suffix}_{start}_{end}",
                                               start, end)
 
         log.status("--- LOOKING FOR AUDIO ---")
@@ -288,7 +287,7 @@ class SelfRunner():
             "--track-order", "0:0,0:1",
         ]
         if chapters:
-            chap = [f for f in [f"{self.config.epnum:02d}.xml", "chapters.xml"] if os.path.isfile(f)]
+            chap = [f for f in [f"{self.config.desc}.xml", "chapters.xml"] if os.path.isfile(f)]
             if len(chap) != 0:
                 mkvtoolnix_args += [
                     "--chapters", chap[0],
