@@ -8,7 +8,9 @@ import shutil
 import string
 import subprocess
 
-from typing import Any, BinaryIO, Callable, List, Optional, Sequence, cast
+from lvsfunc.render import clip_async_render
+
+from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Tuple, cast
 
 from .config import Config
 from .logging import log
@@ -49,14 +51,16 @@ class Encoder():
 
         self._get_encoder_settings(settings_path)
 
-    def encode(self, clip: vs.VideoNode, filename: str, start: int = 0, end: int = 0) -> str:
+    def encode(self, clip: vs.VideoNode, filename: str, start: int = 0, end: int = 0,
+               timecode_file: Optional[str] = None, want_timecodes: bool = False) -> Tuple[str, List[float]]:
         end = end if end != 0 else clip.num_frames
+        want_timecodes = True if timecode_file else want_timecodes
 
         outfile = self.out_template.format(filename=filename)
 
         if os.path.isfile(outfile) and not self.force:
             log.warn("Existing output detected, skipping encode!")
-            return outfile
+            return outfile, []
 
         params = [p.format(frames=end-start, filename=filename) for p in self.params]
 
@@ -71,7 +75,13 @@ class Encoder():
         # signal.signal(signal.SIGINT, forward_to_proc)
         # turns out this didn't work out the way i had hoped
 
-        clip[start:end].output(cast(BinaryIO, process.stdin), y4m=True)
+        # use the python renderer only if we need timecodes because it's slower
+        timecodes: List[float] = []
+        if want_timecodes:
+            timecode_io = open(timecode_file, "w") if timecode_file else None
+            timecodes = clip_async_render(clip[start:end], cast(BinaryIO, process.stdin), timecode_io)
+        else:
+            clip[start:end].output(cast(BinaryIO, process.stdin), y4m=True)
         process.communicate()
 
         # vapoursynth should handle this itself but just in case
@@ -81,7 +91,7 @@ class Encoder():
 
         log.success("--- ENCODE FINISHED ---")
         self.cleanup.append(outfile)
-        return outfile
+        return outfile, timecodes
 
     def _get_encoder_settings(self, settings_path: str) -> None:
         with open(settings_path, "r") as settings:
@@ -116,7 +126,7 @@ class AudioGetter():
         trims = self.src.get_audio()
         if not trims or len(trims) > 1:
             raise NotImplementedError("Please implement multifile trimming")
-        audio_cut = acsuite.eztrim(trims[0].path, cast(acsuite.types.Trim, trims[0].trim), streams=0)[0]
+        audio_cut = acsuite.eztrim(trims[0].path, trims[0].trim or (0, None), streams=0)[0]
         self.cleanup.append(audio_cut)
 
         if ftrim:
@@ -155,6 +165,8 @@ class SelfRunner():
 
     video_file: str
     audio_file: str
+    timecodes: List[float]
+    timecode_file: Optional[str]
 
     encoder: Encoder
     audio: AudioGetter
@@ -243,8 +255,16 @@ class SelfRunner():
             raise FileNotFoundError(f"Failed to find {settings_path}!")
 
         self.encoder = Encoder(settings_path, args.encoder, args.force)
-        self.video_file = self.encoder.encode(self.clip, f"{self.config.desc}_{self.suffix}_{start}_{end}",
-                                              start, end)
+        # we only want to generate timecodes if vfr, otherwise we can just calculate them
+        self.timecode_file = f"{self.config.desc}_{self.suffix}_{start}_{end}_timecodes.txt" \
+            if self.clip.fps_den == 0 else None
+        self.video_file, self.timecodes = self.encoder.encode(self.clip,
+                                                              f"{self.config.desc}_{self.suffix}_{start}_{end}",
+                                                              start, end, self.timecode_file)
+
+        # calculate timecodes if cfr and we didn't generate any (we shouldn'tve)
+        self.timecodes = [round(float(1e9*f*(1/self.clip.fps)))/1e9 for f in range(0, self.clip.num_frames + 1)] \
+            if self.clip.fps_den != 0 and len(self.timecodes) == 0 else self.timecodes
 
         self._do_audio(start, end, audio_codec)
 
@@ -280,11 +300,13 @@ class SelfRunner():
             self.audio_file = out_name
 
     def _do_mux(self, name: str, chapters: bool = True) -> int:
+        tcargs = ["--timecodes", f"0:{self.timecode_file}"] if self.timecode_file else []
         mkvtoolnix_args = [
             "mkvmerge",
             "--output", name,
             "--no-chapters", "--no-track-tags", "--no-global-tags", "--track-name", "0:",
             "--default-track", "0:yes",
+        ] + tcargs + [
             "(", self.video_file, ")",
             "--no-chapters", "--no-track-tags", "--no-global-tags", "--track-name", "0:",
             "--default-track", "0:yes", "--language", "0:jpn",
