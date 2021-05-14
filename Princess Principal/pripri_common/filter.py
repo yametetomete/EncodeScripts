@@ -41,7 +41,7 @@ def _nnedi3_double(clip: vs.VideoNode) -> vs.VideoNode:
     return nn.resize.Bicubic(src_top=0.5, src_left=0.5)
 
 
-def descale(clip: vs.VideoNode, kernel: Kernel = Bicubic(b=0, c=1/2)) -> vs.VideoNode:
+def descale(clip: vs.VideoNode, kernel: Kernel = Bicubic(b=0, c=1/2), mask: bool = False) -> vs.VideoNode:
     def _fsrlineart(clip: vs.VideoNode, width: int, height: int) -> vs.VideoNode:
         clip = clip.resize.Point(1280, 720)
         assert clip.format is not None
@@ -51,7 +51,8 @@ def descale(clip: vs.VideoNode, kernel: Kernel = Bicubic(b=0, c=1/2)) -> vs.Vide
         mask = mask.std.Binarize(scale_thresh(0.65, mask)).std.Maximum()
         mask = depth(mask, clip.format.bits_per_sample, range_in=CRange.FULL, range=CRange.FULL)
         return core.std.MaskedMerge(nn.resize.Bicubic(width, height, filter_param_a=0, filter_param_b=1/2), fsr, mask)
-    return depth(ldescale(clip, height=720, kernel=kernel, upscaler=_fsrlineart, mask=None), 16)
+    return depth(ldescale(clip, height=720, kernel=kernel, upscaler=_fsrlineart), 16) if mask \
+        else depth(ldescale(clip, height=720, kernel=kernel, upscaler=_fsrlineart, mask=None), 16)
 
 
 def antialias(clip: vs.VideoNode) -> vs.VideoNode:
