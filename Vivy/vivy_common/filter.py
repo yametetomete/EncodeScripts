@@ -6,6 +6,7 @@ import vardefunc as vdf
 from awsmfunc import bbmod
 from debandshit import f3kbilateral
 from lvsfunc.aa import upscaled_sraa
+from lvsfunc.denoise import bm3d
 from lvsfunc.kernels import Bicubic
 from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
@@ -13,7 +14,6 @@ from typing import List, Optional, Union
 
 from yt_common import antialiasing
 from yt_common.data import FSRCNNX
-from yt_common.denoise import bm3d
 from yt_common.deband import morpho_mask
 
 import vsutil

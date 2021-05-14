@@ -5,11 +5,11 @@ from typing import Any, Dict, Optional
 
 from yt_common.antialiasing import sraa_clamp, mask_strong
 from yt_common.data import FSRCNNX
-from yt_common.denoise import bm3d
 
 from G41Fun import MaskedDHA
 from awsmfunc import bbmod
 from kagefunc import retinex_edgemask
+from lvsfunc.denoise import bm3d
 from lvsfunc.kernels import Bicubic, Kernel
 from lvsfunc.misc import replace_ranges, scale_thresh
 from lvsfunc.scale import descale as ldescale
