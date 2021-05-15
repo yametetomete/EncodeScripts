@@ -207,7 +207,7 @@ class SelfRunner():
 
         self.clip = workraw_filter() if workraw_filter and self.workraw else final_filter()
 
-        start = args.start if args.start is not None else 0
+        start = args.start or 0
         if args.end is not None:
             if args.end < 0:
                 end = self.clip.num_frames + args.end
@@ -215,6 +215,9 @@ class SelfRunner():
                 end = args.end + 1
         else:
             end = self.clip.num_frames
+        # audio needs to be trimmed relative to source,
+        # acsuite can do the conversions itself but is end-exclusive
+        audio_end = args.end + 1 if args.end and args.end > 0 else args.end
 
         if start < 0:
             raise ValueError("Start frame cannot be less than 0!")
@@ -231,7 +234,7 @@ class SelfRunner():
 
         if args.audio_only:
             out_name += ".mka"
-            self._do_audio(start, end, audio_codec, out_name=out_name)
+            self._do_audio(start, audio_end, audio_codec, out_name=out_name)
             self.audio.do_cleanup()
             log.success("--- AUDIO ENCODE COMPLETE ---")
             return
@@ -266,7 +269,7 @@ class SelfRunner():
         self.timecodes = [round(float(1e9*f*(1/self.clip.fps)))/1e9 for f in range(0, self.clip.num_frames + 1)] \
             if self.clip.fps_den != 0 and len(self.timecodes) == 0 else self.timecodes
 
-        self._do_audio(start, end, audio_codec)
+        self._do_audio(start, audio_end, audio_codec)
 
         try:
             log.status("--- MUXING FILE ---")

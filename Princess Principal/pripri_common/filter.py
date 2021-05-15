@@ -74,17 +74,18 @@ def regrain(clip: vs.VideoNode) -> vs.VideoNode:
     return grain
 
 
-def scenefilter_ed(clip: vs.VideoNode, src: vs.VideoNode, ed: Optional[int]) -> vs.VideoNode:
+def scenefilter_ed(clip: vs.VideoNode, src: vs.VideoNode, ed: Optional[int], mask: bool = True) -> vs.VideoNode:
     if ed is None:
         return clip
-    nc = depth(core.lsmas.LWLibavSource(NCED)[24:-24], 16)
     den = denoise(src)
     dehalo = MaskedDHA(den, rx=2, darkstr=0.1, brightstr=0.75)
     edc = replace_ranges(den, dehalo, [(ed+2121, ed+2159)])
     edc = antialias(edc)
     edc = regrain(edc)
-    mask = diff_creditless_mask(src, src[ed:], nc, ed, 6425, prefilter=True)
-    edc = core.std.MaskedMerge(edc, den, mask)
+    if mask:
+        nc = depth(core.lsmas.LWLibavSource(NCED)[24:-24], 16)
+        dcm = diff_creditless_mask(src, src[ed:], nc, ed, 6425, prefilter=True)
+        edc = core.std.MaskedMerge(edc, den, dcm)
     return replace_ranges(clip, edc, [(ed, ed+2159)])
 
 
