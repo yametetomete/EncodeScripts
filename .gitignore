@@ -24,3 +24,4 @@ ffmpeg2pass*.log
 **/*.egg-info/
 **/bdmv/
 **/bdpremux/
+**/sub/
