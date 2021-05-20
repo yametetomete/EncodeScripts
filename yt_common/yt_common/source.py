@@ -85,7 +85,7 @@ class SimpleSource(FileSource):
         return self.src
 
     def source(self) -> vs.VideoNode:
-        return depth(core.std.Splice([s.apply_trim(self._open(s.path)) for s in self.src]), 16)
+        return core.std.Splice([s.apply_trim(self._open(s.path)) for s in self.src])
 
 
 class DehardsubFileFinder(FileSource):

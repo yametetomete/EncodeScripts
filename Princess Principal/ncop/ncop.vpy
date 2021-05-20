@@ -1,6 +1,6 @@
 import vapoursynth as vs
 
-from pripri_common import PriPriConfig, edgefix, denoise, descale, antialias, regrain, finalize
+from pripri_common import PriPriConfig, edgefix, denoise, descale, deband, antialias, regrain, finalize
 
 from yt_common.automation import SelfRunner
 from yt_common.source import FileTrim, SimpleSource
@@ -21,7 +21,8 @@ def filter() -> vs.VideoNode:
     ef = edgefix(src)
     den = denoise(ef)
     rescale = descale(den)
-    aa = antialias(rescale)
+    deb = deband(rescale)
+    aa = antialias(deb)
     grain = regrain(aa)
     final = finalize(grain)
     src.set_output(1)

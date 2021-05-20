@@ -1,7 +1,7 @@
 import vapoursynth as vs
 import os
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from yt_common.antialiasing import sraa_clamp, mask_strong
 from yt_common.data import FSRCNNX
@@ -11,9 +11,11 @@ from awsmfunc import bbmod
 from kagefunc import retinex_edgemask
 from lvsfunc.denoise import bm3d
 from lvsfunc.kernels import Bicubic, Kernel
+from lvsfunc.mask import detail_mask
 from lvsfunc.misc import replace_ranges, scale_thresh
 from lvsfunc.scale import descale as ldescale
-from vardefunc import fsrcnnx_upscale, diff_creditless_mask
+from lvsfunc.types import Range
+from vardefunc import fsrcnnx_upscale, diff_creditless_mask, dumb3kdb
 from vsutil import depth
 from vsutil import Range as CRange
 
@@ -28,8 +30,11 @@ def edgefix(clip: vs.VideoNode) -> vs.VideoNode:
     return bb
 
 
-def denoise(clip: vs.VideoNode) -> vs.VideoNode:
-    return bm3d(clip, sigma=0.75, radius=1)
+def denoise(clip: vs.VideoNode, sigma: float = 0.75, h: float = 0.4) -> vs.VideoNode:
+    return core.std.ShufflePlanes([
+        bm3d(core.std.ShufflePlanes(clip, planes=0, colorfamily=vs.GRAY), sigma=sigma, radius=1),
+        clip.knlm.KNLMeansCL(d=3, a=1, h=h)
+    ], planes=[0, 1, 2], colorfamily=vs.YUV)
 
 
 def _nnedi3_double(clip: vs.VideoNode) -> vs.VideoNode:
@@ -53,6 +58,13 @@ def descale(clip: vs.VideoNode, kernel: Kernel = Bicubic(b=0, c=1/2), mask: bool
         return core.std.MaskedMerge(nn.resize.Bicubic(width, height, filter_param_a=0, filter_param_b=1/2), fsr, mask)
     return depth(ldescale(clip, height=720, kernel=kernel, upscaler=_fsrlineart), 16) if mask \
         else depth(ldescale(clip, height=720, kernel=kernel, upscaler=_fsrlineart, mask=None), 16)
+
+
+def deband(clip: vs.VideoNode, strong: Optional[List[Range]] = None) -> vs.VideoNode:
+    mask = detail_mask(clip)
+    deband = core.std.MaskedMerge(dumb3kdb(clip, radius=16, threshold=40), clip, mask)
+    deband_strong = core.std.MaskedMerge(dumb3kdb(clip, radius=16, threshold=50), clip, mask)
+    return replace_ranges(deband, deband_strong, strong or [])
 
 
 def antialias(clip: vs.VideoNode) -> vs.VideoNode:

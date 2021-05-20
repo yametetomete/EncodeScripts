@@ -1,13 +1,14 @@
 import vapoursynth as vs
 
-from pripri_common import PriPriConfig, edgefix, denoise, descale, antialias, regrain, scenefilter_ed, finalize
+from pripri_common import PriPriConfig, edgefix, denoise, descale, deband, antialias, regrain, scenefilter_ed, finalize
 
 from yt_common.automation import SelfRunner
 from yt_common.source import FileTrim, SimpleSource
 
 from lvsfunc.misc import replace_ranges
+from lvsfunc.types import Range
 
-from typing import Optional
+from typing import List, Optional
 
 import os
 
@@ -20,6 +21,12 @@ SOURCE: SimpleSource = SimpleSource(
 )
 ED: Optional[int] = None
 
+DEBAND_STRONG: List[Range] = [
+    (32710, 32757),
+    (33104, 33388),
+    (34406, 34534),
+]
+
 
 def filter() -> vs.VideoNode:
     src = SOURCE.source()
@@ -28,7 +35,8 @@ def filter() -> vs.VideoNode:
     ef = edgefix(src)
     den = denoise(ef)
     rescale = descale(den)
-    aa = antialias(rescale)
+    deb = deband(rescale, strong=DEBAND_STRONG)
+    aa = antialias(deb)
     grain = regrain(aa)
     ed = scenefilter_ed(grain, src, ED)
     cr = replace_ranges(ed, src, [(29971, 32128)])
