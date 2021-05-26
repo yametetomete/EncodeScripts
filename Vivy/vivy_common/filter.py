@@ -10,7 +10,7 @@ from lvsfunc.denoise import bm3d
 from lvsfunc.kernels import Bicubic
 from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from yt_common import antialiasing
 from yt_common.data import FSRCNNX
@@ -36,13 +36,35 @@ def fsrcnnx_rescale(src: vs.VideoNode, noscale: Optional[List[Range]] = None,
     return lvf.misc.replace_ranges(descale, src, noscale) if noscale else descale
 
 
+def _fixplane(clip: vs.VideoNode, top: int, bottom: int,
+              bbt: int, bbb: int, chroma: bool = False, blur: int = 20) -> vs.VideoNode:
+    return core.std.StackVertical([bbmod(clip.std.Crop(bottom=clip.height-top), bottom=1 if not chroma else 0),
+                                   bbmod(clip.std.Crop(top=top, bottom=bottom), top=bbt, bottom=bbb, blur=blur),
+                                   bbmod(clip.std.Crop(top=clip.height-bottom), top=1 if not chroma else 0)])
+
+
 def letterbox_edgefix(clip: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
-    edgefix = bbmod(clip.std.Crop(top=132, bottom=132), top=2, bottom=2, blur=500).std.AddBorders(top=132, bottom=132)
-    return lvf.misc.replace_ranges(clip, edgefix, ranges)
+    fy = _fixplane(clip.std.ShufflePlanes(planes=0, colorfamily=vs.GRAY), top=132, bottom=131, bbt=3, bbb=3)
+    fu = _fixplane(clip.std.ShufflePlanes(planes=1, colorfamily=vs.GRAY), top=66, bottom=65, bbt=2, bbb=2, chroma=True)
+    fv = _fixplane(clip.std.ShufflePlanes(planes=2, colorfamily=vs.GRAY), top=66, bottom=65, bbt=2, bbb=2, chroma=True)
+    return replace_ranges(clip, core.std.ShufflePlanes([fy, fu, fv], planes=[0, 0, 0], colorfamily=vs.YUV), ranges)
 
 
-def denoise(clip: vs.VideoNode, sigma: Union[float, List[float]] = 1.5) -> vs.VideoNode:
-    return bm3d(clip, sigma=sigma)
+def letterbox_refix(aa: vs.VideoNode, noaa: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
+    return replace_ranges(aa, core.std.StackVertical([
+        aa.std.Crop(bottom=aa.height-130),
+        noaa.std.Crop(top=130, bottom=aa.height-134),
+        aa.std.Crop(top=134, bottom=132),
+        noaa.std.Crop(top=aa.height-132, bottom=130),
+        aa.std.Crop(top=aa.height-130)
+    ]), ranges)
+
+
+def denoise(clip: vs.VideoNode, sigma: float = 1.5, h: float = 0.7) -> vs.VideoNode:
+    return core.std.ShufflePlanes([
+        bm3d(clip.std.ShufflePlanes(planes=0, colorfamily=vs.GRAY), sigma=sigma, radius=1),
+        clip.knlm.KNLMeansCL(d=3, a=1, h=h, channels="UV"),
+    ], planes=[0, 1, 2], colorfamily=vs.YUV)
 
 
 def deband(clip: vs.VideoNode) -> vs.VideoNode:

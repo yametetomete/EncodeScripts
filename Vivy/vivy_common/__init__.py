@@ -1,2 +1,3 @@
-from .filter import antialias, deband, denoise, finalize, fsrcnnx_rescale, letterbox_edgefix, regrain  # noqa: F401
+from .filter import (antialias, deband, denoise, finalize, fsrcnnx_rescale,  # noqa: F401
+                     letterbox_edgefix, letterbox_refix, regrain)
 from .config import VivyConfig, VivySource  # noqa: F401
