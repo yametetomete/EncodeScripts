@@ -78,8 +78,9 @@ class FileSource(ABC):
 class SimpleSource(FileSource):
     src: List[FileTrim]
 
-    def __init__(self, src: Union[FileTrim, List[FileTrim]]) -> None:
-        self.src = src if isinstance(src, list) else [src]
+    def __init__(self, src: Union[str, List[str], FileTrim, List[FileTrim]]) -> None:
+        srcl = src if isinstance(src, list) else [src]
+        self.src = [FileTrim(s, (None, None)) if isinstance(s, str) else s for s in srcl]
 
     def get_audio(self) -> List[FileTrim]:
         return self.src

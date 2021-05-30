@@ -10,8 +10,9 @@ import subprocess
 
 from lvsfunc.render import clip_async_render
 
-from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Tuple, cast
+from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Set, Tuple, cast
 
+from .chapters import Chapter, make_chapters
 from .config import Config
 from .logging import log
 from .source import FileSource
@@ -115,45 +116,33 @@ class Encoder():
 class AudioGetter():
     config: Config
     src: FileSource
-    cleanup: List[str]
+    cleanup: Set[str]
 
     def __init__(self, config: Config, src: FileSource) -> None:
         self.config = config
         self.src = src
-        self.cleanup = []
+        self.cleanup = set()
 
     def trim_audio(self, ftrim: Optional[acsuite.types.Trim] = None) -> str:
         trims = self.src.get_audio()
         if not trims or len(trims) > 1:
             raise NotImplementedError("Please implement multifile trimming")
         audio_cut = acsuite.eztrim(trims[0].path, trims[0].trim or (0, None), streams=0)[0]
-        self.cleanup.append(audio_cut)
+        self.cleanup.add(audio_cut)
 
         if ftrim:
             audio_cut = acsuite.eztrim(audio_cut, ftrim, ref_clip=self.src.source())[0]
-            self.cleanup.append(audio_cut)
+            self.cleanup.add(audio_cut)
+
+        audio_cut = self.config.encode_audio(audio_cut)
+        self.cleanup.add(audio_cut)
 
         return audio_cut
-
-    def encode_audio(self, path: str, codec_args: List[str]) -> str:
-        ffmpeg_args = [
-            "ffmpeg",
-            "-hide_banner", "-loglevel", "panic",
-            "-i", path,
-            "-y",
-            "-map", "0:a",
-        ] + codec_args + [AUDIO_ENCODE]
-        print("+ " + " ".join(ffmpeg_args))
-        subprocess.call(ffmpeg_args)
-
-        self.cleanup.append(AUDIO_ENCODE)
-
-        return AUDIO_ENCODE
 
     def do_cleanup(self) -> None:
         for f in self.cleanup:
             os.remove(f)
-        self.cleanup = []
+        self.cleanup.clear()
 
 
 class SelfRunner():
@@ -175,7 +164,7 @@ class SelfRunner():
 
     def __init__(self, config: Config, source: FileSource, final_filter: Callable[[], vs.VideoNode],
                  workraw_filter: Optional[Callable[[], vs.VideoNode]] = None,
-                 audio_codec: Optional[List[str]] = None) -> None:
+                 chapters: Optional[List[Chapter]] = None) -> None:
         self.config = config
         self.src = source
         self.video_clean = False
@@ -230,11 +219,11 @@ class SelfRunner():
         if start >= end:
             raise ValueError("Start frame must be before end frame!")
 
-        out_name = f"{self.config.title.lower()}_{self.config.desc}_{self.suffix}"
+        out_name = f"{self.config.title.lower().replace(' ', '_')}_{self.config.desc}_{self.suffix}"
 
         if args.audio_only:
             out_name += ".mka"
-            self._do_audio(start, audio_end, audio_codec, out_name=out_name)
+            self._do_audio(start, audio_end, out_name=out_name)
             self.audio.do_cleanup()
             log.success("--- AUDIO ENCODE COMPLETE ---")
             return
@@ -269,7 +258,11 @@ class SelfRunner():
         self.timecodes = [round(float(1e9*f*(1/self.clip.fps)))/1e9 for f in range(0, self.clip.num_frames + 1)] \
             if self.clip.fps_den != 0 and len(self.timecodes) == 0 else self.timecodes
 
-        self._do_audio(start, audio_end, audio_codec)
+        self._do_audio(start, audio_end)
+
+        if chapters:
+            log.status("--- GENERATING CHAPTERS  ---")
+            make_chapters(chapters, self.timecodes, f"{self.config.desc}.xml")
 
         try:
             log.status("--- MUXING FILE ---")
@@ -289,15 +282,12 @@ class SelfRunner():
 
         log.success("--- ENCODE COMPLETE ---")
 
-    def _do_audio(self, start: int, end: int, codec: Optional[List[str]], out_name: Optional[str] = None) -> None:
+    def _do_audio(self, start: int, end: int, out_name: Optional[str] = None) -> None:
         log.status("--- LOOKING FOR AUDIO ---")
         self.audio = AudioGetter(self.config, self.src)
 
         log.status("--- TRIMMING AUDIO ---")
         self.audio_file = self.audio.trim_audio((start, end))
-        if codec:
-            log.status("--- TRANSCODING AUDIO ---")
-            self.audio_file = self.audio.encode_audio(self.audio_file, codec)
         if out_name:
             shutil.copy(self.audio_file, out_name)
             self.audio_file = out_name
