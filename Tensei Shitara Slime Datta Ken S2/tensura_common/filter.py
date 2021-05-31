@@ -1,6 +1,6 @@
 import vapoursynth as vs
 
-from yt_common.antialiasing import mask_strong, sraa_clamp, supersample_aa
+from yt_common.antialiasing import mask_strong, sraa_clamp
 from yt_common.data import FSRCNNX
 from yt_common.scale import nnedi3_double
 
@@ -72,11 +72,11 @@ def deband(clip: vs.VideoNode, strong: Optional[List[Range]] = None,
 def antialias(clip: vs.VideoNode, strong: List[Range],
               sangnom: Optional[List[Tuple[Range, List[BoundingBox]]]] = None) -> vs.VideoNode:
     clamp = sraa_clamp(clip, mask=mask_strong)
-    sraa_13 = upscaled_sraa(clip, rfactor=1.3, downscaler=Bicubic(b=0, c=1/2).scale)
+    sraa_13 = upscaled_sraa(clip, rfactor=1.3)
     sraa_13 = core.std.MaskedMerge(clip, sraa_13, mask_strong(sraa_13))
     clamp = replace_ranges(clamp, sraa_13, strong)
     if sangnom:
-        sn = supersample_aa(sraa_13, rfactor=1.5, aafun=lambda c, s: c.sangnom.SangNom())
+        sn = upscaled_sraa(sraa_13, aafun=lambda c: c.sangnom.SangNom())
         sn = core.std.MaskedMerge(sraa_13, sn, mask_strong(sn))
         for r, ms in sangnom:
             mask = core.std.BlankClip(clip.std.ShufflePlanes(planes=0, colorfamily=vs.GRAY))
