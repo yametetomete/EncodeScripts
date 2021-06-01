@@ -5,10 +5,10 @@ import vardefunc as vdf
 
 from awsmfunc import bbmod
 from debandshit import f3kbilateral
+from functools import partial
 from lvsfunc.aa import upscaled_sraa
 from lvsfunc.denoise import bm3d
-from lvsfunc.kernels import Bicubic
-from lvsfunc.misc import replace_ranges
+from lvsfunc.misc import replace_ranges, scale_thresh
 from lvsfunc.types import Range
 from typing import List, Optional
 
@@ -43,11 +43,31 @@ def _fixplane(clip: vs.VideoNode, top: int, bottom: int,
                                    bbmod(clip.std.Crop(top=clip.height-bottom), top=1 if not chroma else 0)])
 
 
-def letterbox_edgefix(clip: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
-    fy = _fixplane(clip.std.ShufflePlanes(planes=0, colorfamily=vs.GRAY), top=132, bottom=131, bbt=3, bbb=3)
-    fu = _fixplane(clip.std.ShufflePlanes(planes=1, colorfamily=vs.GRAY), top=66, bottom=65, bbt=2, bbb=2, chroma=True)
-    fv = _fixplane(clip.std.ShufflePlanes(planes=2, colorfamily=vs.GRAY), top=66, bottom=65, bbt=2, bbb=2, chroma=True)
-    return replace_ranges(clip, core.std.ShufflePlanes([fy, fu, fv], planes=[0, 0, 0], colorfamily=vs.YUV), ranges)
+def letterbox_edgefix(clip: vs.VideoNode, crops: Optional[List[Range]] = None,
+                      fades: Optional[List[Range]] = None) -> vs.VideoNode:
+    assert clip.format is not None
+    fixed = clip
+    if fades:
+        fy = _fixplane(clip.std.ShufflePlanes(planes=0, colorfamily=vs.GRAY),
+                       top=132, bottom=131, bbt=2, bbb=2)
+        fu = _fixplane(clip.std.ShufflePlanes(planes=1, colorfamily=vs.GRAY),
+                       top=66, bottom=65, bbt=1, bbb=2, chroma=True)
+        fv = _fixplane(clip.std.ShufflePlanes(planes=2, colorfamily=vs.GRAY),
+                       top=66, bottom=66, bbt=1, bbb=2, chroma=True)
+        f = core.std.ShufflePlanes([fy, fu, fv], planes=[0, 0, 0], colorfamily=vs.YUV)
+        fixed = replace_ranges(fixed, f, fades)
+    if crops:
+        black = [
+            vsutil.scale_value(0, 8, clip.format.bits_per_sample, range_in=vsutil.Range.FULL,
+                               range=vsutil.Range.LIMITED, scale_offsets=True),
+            scale_thresh(0.5, clip),
+            scale_thresh(0.5, clip),
+        ]
+        crop = clip.std.Crop(top=132, bottom=132)
+        bb = bbmod(crop, top=2, bottom=2, blur=500)
+        f = bb.std.AddBorders(top=132, bottom=132, color=black)
+        fixed = replace_ranges(fixed, f, crops)
+    return fixed
 
 
 def letterbox_refix(aa: vs.VideoNode, noaa: vs.VideoNode, ranges: List[Range]) -> vs.VideoNode:
@@ -84,10 +104,12 @@ def deband(clip: vs.VideoNode) -> vs.VideoNode:
 
 def antialias(clip: vs.VideoNode, weak: Optional[List[Range]] = None, strong: Optional[List[Range]] = None,
               stronger: Optional[List[Range]] = None, noaa: Optional[List[Range]] = None) -> vs.VideoNode:
-    mask = antialiasing.combine_mask(clip, weak or [])
+    mask = partial(antialiasing.combine_mask, weak=weak or [])
     clamp = antialiasing.sraa_clamp(clip, mask=mask)
-    sraa = core.std.MaskedMerge(clip, upscaled_sraa(clip, rfactor=2, downscaler=Bicubic(b=0, c=1/2).scale), mask)
-    sraa_13 = core.std.MaskedMerge(clip, upscaled_sraa(clip, rfactor=1.3, downscaler=Bicubic(b=0, c=1/2).scale), mask)
+    sraa = upscaled_sraa(clip, rfactor=2)
+    sraa = core.std.MaskedMerge(clip, sraa, mask(sraa))
+    sraa_13 = upscaled_sraa(clip, rfactor=1.3)
+    sraa_13 = core.std.MaskedMerge(clip, sraa_13, mask(sraa_13))
     return replace_ranges(replace_ranges(replace_ranges(clamp, clip, noaa or []), sraa, strong or []), sraa_13,
                           stronger or [])
 
