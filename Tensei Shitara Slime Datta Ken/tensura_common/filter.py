@@ -34,9 +34,9 @@ def _fsrlineart(clip: vs.VideoNode, width: int, height: int) -> vs.VideoNode:
     return core.std.MaskedMerge(nn.resize.Bicubic(width, height, filter_param_a=0, filter_param_b=1/2), fsr, mask)
 
 
-def edgefix(clip: vs.VideoNode, ranges: Optional[List[Range]] = None) -> vs.VideoNode:
+def edgefix(clip: vs.VideoNode) -> vs.VideoNode:
     bb: vs.VideoNode = bbmod(clip, top=1, bottom=1, left=1, right=1, blur=500)
-    return replace_ranges(clip, bb, ranges or [])
+    return bb
 
 
 def descale(clip: vs.VideoNode) -> vs.VideoNode:
@@ -55,26 +55,25 @@ def deband(clip: vs.VideoNode, strong: Optional[List[Range]] = None,
            nuclear: Optional[List[Range]] = None) -> vs.VideoNode:
     dmask = detail_mask(clip)
     deb = dumb3kdb(clip, radius=16, threshold=30)
-    debs = dumb3kdb(clip, radius=24, threshold=60)
-    deb = replace_ranges(deb, debs, strong or [])
-    debn = core.std.ShufflePlanes([
-        core.std.MaskedMerge(
+    if strong:
+        debs = dumb3kdb(clip, radius=24, threshold=60)
+        deb = replace_ranges(deb, debs, strong or [])
+    if nuclear:
+        debn = core.std.ShufflePlanes([
             f3kbilateral(clip.std.ShufflePlanes(planes=0, colorfamily=vs.GRAY), y=60),
-            clip.std.ShufflePlanes(planes=0, colorfamily=vs.GRAY),
-            detail_mask(clip)
-        ),
-        deb
-    ], planes=[0, 1, 2], colorfamily=vs.YUV)
-    deb = replace_ranges(deb, debn, nuclear or [])
+            deb
+        ], planes=[0, 1, 2], colorfamily=vs.YUV)
+        deb = replace_ranges(deb, debn, nuclear or [])
     return core.std.MaskedMerge(deb, clip, dmask)
 
 
-def antialias(clip: vs.VideoNode, strong: List[Range],
+def antialias(clip: vs.VideoNode, strong: Optional[List[Range]] = None,
               sangnom: Optional[List[Tuple[Range, List[BoundingBox]]]] = None) -> vs.VideoNode:
     clamp = sraa_clamp(clip, mask=mask_strong)
-    sraa_13 = upscaled_sraa(clip, rfactor=1.3)
-    sraa_13 = core.std.MaskedMerge(clip, sraa_13, mask_strong(sraa_13))
-    clamp = replace_ranges(clamp, sraa_13, strong)
+    if strong or sangnom:
+        sraa_13 = upscaled_sraa(clip, rfactor=1.3)
+        sraa_13 = core.std.MaskedMerge(clip, sraa_13, mask_strong(sraa_13))
+        clamp = replace_ranges(clamp, sraa_13, strong or [])
     if sangnom:
         sn = upscaled_sraa(sraa_13, aafun=lambda c: c.sangnom.SangNom())
         sn = core.std.MaskedMerge(sraa_13, sn, mask_strong(sn))

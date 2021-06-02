@@ -1,11 +1,12 @@
 import vapoursynth as vs
 
-from tensura_common import TenSuraConfig, antialias, deband, denoise, descale, finalize, regrain
+from tensura_common import TenSuraConfig, antialias, deband, denoise, descale, edgefix, finalize, regrain
 
 from yt_common.automation import SelfRunner
 from yt_common.chapters import Chapter
 from yt_common.source import FileTrim, SimpleSource
 
+from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
 
 from typing import List
@@ -28,6 +29,10 @@ CHAPTERS: List[Chapter] = [
     Chapter("Next", 33927),
 ]
 
+NOD3: List[Range] = [
+    (33927, 34046),
+]
+
 AA_STRONG: List[Range] = [
 ]
 
@@ -41,9 +46,11 @@ core = vs.core
 
 def filter() -> vs.VideoNode:
     src = SOURCE.source()
-    den = denoise(src)
+    ef = edgefix(src)
+    den = denoise(ef)
     descaled = descale(den)
     deb = deband(descaled, nuclear=DEBAND_NUCLEAR)
+    deb = replace_ranges(deb, src, NOD3)
     aa = antialias(deb, strong=AA_STRONG)
     grain = regrain(aa)
     final = finalize(grain)

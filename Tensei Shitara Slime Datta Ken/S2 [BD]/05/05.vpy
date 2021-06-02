@@ -7,6 +7,7 @@ from yt_common.chapters import Chapter
 from yt_common.source import FileTrim, SimpleSource
 
 from lvsfunc.mask import BoundingBox
+from lvsfunc.misc import replace_ranges
 from lvsfunc.types import Range
 
 from typing import List, Tuple
@@ -27,6 +28,10 @@ CHAPTERS: List[Chapter] = [
     Chapter("Part B", 13141),
     Chapter("ED", 31770),
     Chapter("Next", 33928),
+]
+
+NOD3: List[Range] = [
+    (33928, 34047),
 ]
 
 AA_STRONG: List[Range] = [
@@ -53,20 +58,16 @@ SANGNOM: List[Tuple[Range, List[BoundingBox]]] = [
 DEBAND_NUCLEAR: List[Range] = [
 ]
 
-EDGEFIX: List[Range] = [
-    (0, 2085),
-    (4245, 31769),
-]
-
 core = vs.core
 
 
 def filter() -> vs.VideoNode:
     src = SOURCE.source()
-    ef = edgefix(src, EDGEFIX)
+    ef = edgefix(src)
     den = denoise(ef)
     descaled = descale(den)
     deb = deband(descaled, nuclear=DEBAND_NUCLEAR)
+    deb = replace_ranges(deb, src, NOD3)
     aa = antialias(deb, strong=AA_STRONG, sangnom=SANGNOM)
     grain = regrain(aa)
     final = finalize(grain)
