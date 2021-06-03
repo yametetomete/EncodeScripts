@@ -1,8 +1,8 @@
 import vapoursynth as vs
 
-from tensura_common import TenSuraConfig, antialias, deband, denoise, descale, edgefix, finalize, regrain
+from tensura_common import TenSuraS2BDConfig, antialias, deband, denoise, descale, edgefix, finalize, regrain
 
-from yt_common.automation import SelfRunner
+from yt_common.automation import SelfRunner, Zone
 from yt_common.chapters import Chapter
 from yt_common.source import FileTrim, SimpleSource
 
@@ -14,7 +14,7 @@ from typing import List
 import os
 
 EPNUM: int = int(os.path.basename(os.path.splitext(__file__)[0]))
-CONFIG: TenSuraConfig = TenSuraConfig(EPNUM)
+CONFIG: TenSuraS2BDConfig = TenSuraS2BDConfig(EPNUM)
 BDMV: str = "../bdmv/[BDMV][210326][Tensei Shitara Slime Datta Ken 2nd Season][Vol.1]/BDMV/STREAM"
 SOURCE: SimpleSource = SimpleSource(
     FileTrim(os.path.join(BDMV, "00008.m2ts"), (None, -50))
@@ -33,6 +33,11 @@ NOD3: List[Range] = [
     (8023, 8205),
     (33926, 34045),
 ]
+
+ZONES: List[Zone] = [
+]
+
+ZONES += [Zone(r, 0.75) for r in NOD3 if isinstance(r, tuple)]
 
 AA_STRONG: List[Range] = [
     (3084, 3125),
@@ -60,6 +65,6 @@ def filter() -> vs.VideoNode:
 
 
 if __name__ == "__main__":
-    SelfRunner(CONFIG, SOURCE, filter, chapters=CHAPTERS)
+    SelfRunner(CONFIG, SOURCE, filter, chapters=CHAPTERS, zones=ZONES)
 else:
     filter()

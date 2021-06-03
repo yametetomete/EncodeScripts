@@ -101,3 +101,22 @@ def regrain(clip: vs.VideoNode) -> vs.VideoNode:
 
 def finalize(clip: vs.VideoNode) -> vs.VideoNode:
     return depth(clip, 10)
+
+
+def megurumono_scenefilter(clip: vs.VideoNode, start: Optional[int] = None) -> vs.VideoNode:
+    if start is None:
+        return clip
+    DEBAND_STRONG: List[Range] = [
+        (start+12, start+256),
+        (start+778, start+1007),
+        (start+1025, start+1059),
+        (start+1217, start+1322),
+        (start+1368, start+1437),
+    ]
+    ef = edgefix(clip)
+    den = denoise(ef)
+    descaled = descale(den)
+    deb = deband(descaled, strong=DEBAND_STRONG)
+    aa = antialias(deb)
+    grain = regrain(aa)
+    return grain
