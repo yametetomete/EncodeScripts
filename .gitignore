@@ -25,4 +25,5 @@ ffmpeg2pass*.log
 **/bdmv/
 **/bdpremux/
 **/sub/
+**/dvd/
 *.txt

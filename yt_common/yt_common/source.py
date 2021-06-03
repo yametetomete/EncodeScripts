@@ -64,10 +64,14 @@ def glob_filename(pattern: str) -> str:
 class FileSource(ABC):
     def _open(self, path: str) -> vs.VideoNode:
         return depth(core.lsmas.LWLibavSource(path), 16) if path.lower().endswith(".m2ts") \
+            else depth(core.d2v.Source(path), 16) if path.lower().endswith(".d2v") \
             else depth(core.ffms2.Source(path), 16)
 
+    def audio_ref(self) -> Optional[vs.VideoNode]:
+        return None
+
     @abstractmethod
-    def get_audio(self) -> List[FileTrim]:
+    def audio_src(self) -> List[FileTrim]:
         pass
 
     @abstractmethod
@@ -77,16 +81,30 @@ class FileSource(ABC):
 
 class SimpleSource(FileSource):
     src: List[FileTrim]
+    sclip: Optional[vs.VideoNode]
+    aref: Optional[vs.VideoNode]
+    asrc: Optional[List[FileTrim]]
 
-    def __init__(self, src: Union[str, List[str], FileTrim, List[FileTrim]]) -> None:
+    def __init__(self, src: Union[str, List[str], FileTrim, List[FileTrim]],
+                 aref: Optional[vs.VideoNode] = None,
+                 asrc: Optional[Union[FileTrim, List[FileTrim]]] = None) -> None:
         srcl = src if isinstance(src, list) else [src]
         self.src = [FileTrim(s, (None, None)) if isinstance(s, str) else s for s in srcl]
+        self.sclip = None
+        self.aref = aref
+        self.asrc = asrc if isinstance(asrc, list) else [asrc] if asrc is not None else None
 
-    def get_audio(self) -> List[FileTrim]:
-        return self.src
+    def audio_ref(self) -> Optional[vs.VideoNode]:
+        return self.aref
+
+    def audio_src(self) -> List[FileTrim]:
+        return self.asrc if self.asrc else self.src
 
     def source(self) -> vs.VideoNode:
-        return core.std.Splice([s.apply_trim(self._open(s.path)) for s in self.src])
+        if self.sclip:
+            return self.sclip
+        self.sclip = core.std.Splice([s.apply_trim(self._open(s.path)) for s in self.src])
+        return self.sclip
 
 
 class DehardsubFileFinder(FileSource):
@@ -124,7 +142,7 @@ class FunimationSource(DehardsubFileFinder):
         self.ref_is_funi = False
         super().__init__(*args, **kwargs)
 
-    def get_audio(self) -> List[FileTrim]:
+    def audio_src(self) -> List[FileTrim]:
         if self.ref_is_funi:
             return [FileTrim(self.get_funi_filename(), (FUNI_INTRO, None))]
 

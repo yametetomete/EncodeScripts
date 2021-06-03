@@ -7,19 +7,24 @@ import random
 import shutil
 import string
 import subprocess
+import tempfile
 
 from lvsfunc.render import clip_async_render
 
 from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Set, Tuple, cast
 
-from .chapters import Chapter, make_chapters
+from .chapters import Chapter, Edition, make_chapters, make_qpfile
 from .config import Config
 from .logging import log
 from .source import FileSource
 
 core = vs.core
 
-AUDIO_ENCODE: str = "_audiogetter_encode.mka"
+AUDIO_PFX: str = "_audiogetter_temp_"
+
+
+def get_temp_filename(prefix: str = "", suffix: str = "") -> str:
+    return f"{prefix}{next(tempfile._get_candidate_names())}{suffix}"  # type: ignore
 
 
 def bin_to_plat(binary: str) -> str:
@@ -63,7 +68,7 @@ class Encoder():
             log.warn("Existing output detected, skipping encode!")
             return outfile, []
 
-        params = [p.format(frames=end-start, filename=filename) for p in self.params]
+        params = [p.format(frames=end-start, filename=filename, qpfile="qpfile.txt") for p in self.params]
 
         log.status("--- RUNNING ENCODE ---")
 
@@ -124,14 +129,24 @@ class AudioGetter():
         self.cleanup = set()
 
     def trim_audio(self, ftrim: Optional[acsuite.types.Trim] = None) -> str:
-        trims = self.src.get_audio()
-        if not trims or len(trims) > 1:
-            raise NotImplementedError("Please implement multifile trimming")
-        audio_cut = acsuite.eztrim(trims[0].path, trims[0].trim or (0, None), streams=0)[0]
-        self.cleanup.add(audio_cut)
+        trims = self.src.audio_src()
+
+        tlist: List[str] = []
+        for t in trims:
+            audio_cut = acsuite.eztrim(t.path, t.trim or (0, None), ref_clip=self.src.audio_ref(),
+                                       outfile=get_temp_filename(prefix=AUDIO_PFX, suffix=".mka"),
+                                       streams=0)[0]
+            self.cleanup.add(audio_cut)
+            tlist.append(audio_cut)
+
+        if len(tlist) > 1:
+            ffmpeg = acsuite.ffmpeg.FFmpegAudio()
+            audio_cut = ffmpeg.concat(*tlist)
+            self.cleanup.add(audio_cut)
 
         if ftrim:
-            audio_cut = acsuite.eztrim(audio_cut, ftrim, ref_clip=self.src.source())[0]
+            audio_cut = acsuite.eztrim(audio_cut, ftrim, ref_clip=self.src.source(),
+                                       outfile=get_temp_filename(prefix=AUDIO_PFX, suffix=".mka"))[0]
             self.cleanup.add(audio_cut)
 
         audio_cut = self.config.encode_audio(audio_cut)
@@ -164,7 +179,8 @@ class SelfRunner():
 
     def __init__(self, config: Config, source: FileSource, final_filter: Callable[[], vs.VideoNode],
                  workraw_filter: Optional[Callable[[], vs.VideoNode]] = None,
-                 chapters: Optional[List[Chapter]] = None) -> None:
+                 chapters: Optional[List[Chapter]] = None,
+                 editions: Optional[List[Edition]] = None) -> None:
         self.config = config
         self.src = source
         self.video_clean = False
@@ -242,6 +258,10 @@ class SelfRunner():
             log.status("Comparison generated.")
             return
 
+        open("qpfile.txt", "w").close()  # guarantee qpfile is created/cleared as appropriate
+        if (editions or chapters) and (start == 0 and end == self.clip.num_frames):
+            make_qpfile("qpfile.txt", chapters=chapters, editions=editions)
+
         settings_path = os.path.join(self.config.datapath, f"{self.profile}-settings")
         if not os.path.isfile(settings_path):
             raise FileNotFoundError(f"Failed to find {settings_path}!")
@@ -260,9 +280,9 @@ class SelfRunner():
 
         self._do_audio(start, audio_end)
 
-        if chapters:
+        if (editions or chapters) and (start == 0 and end == self.clip.num_frames):
             log.status("--- GENERATING CHAPTERS  ---")
-            make_chapters(chapters, self.timecodes, f"{self.config.desc}.xml")
+            make_chapters(self.timecodes, f"{self.config.desc}.xml", chapters=chapters, editions=editions)
 
         try:
             log.status("--- MUXING FILE ---")
