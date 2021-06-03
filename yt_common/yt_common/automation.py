@@ -11,7 +11,7 @@ import tempfile
 
 from lvsfunc.render import clip_async_render
 
-from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Set, Tuple, cast
+from typing import Any, BinaryIO, Callable, List, NamedTuple, Optional, Sequence, Set, Tuple, cast
 
 from .chapters import Chapter, Edition, make_chapters, make_qpfile
 from .config import Config
@@ -39,6 +39,11 @@ def forward_signal(signum: int, frame: Any, process: Any) -> None:
     process.send_signal(signum)
 
 
+class Zone(NamedTuple):
+    r: Tuple[int, int]
+    b: float
+
+
 class Encoder():
     clip: vs.VideoNode
 
@@ -58,6 +63,7 @@ class Encoder():
         self._get_encoder_settings(settings_path)
 
     def encode(self, clip: vs.VideoNode, filename: str, start: int = 0, end: int = 0,
+               zones: Optional[List[Zone]] = None, qpfile: Optional[str] = None,
                timecode_file: Optional[str] = None, want_timecodes: bool = False) -> Tuple[str, List[float]]:
         end = end if end != 0 else clip.num_frames
         want_timecodes = True if timecode_file else want_timecodes
@@ -68,7 +74,25 @@ class Encoder():
             log.warn("Existing output detected, skipping encode!")
             return outfile, []
 
-        params = [p.format(frames=end-start, filename=filename, qpfile="qpfile.txt") for p in self.params]
+        params: List[str] = []
+        for p in self.params:
+            if p == "$ZONES":
+                if zones:
+                    zones.sort(key=lambda z: z.r[0])
+                    params.append("--zones")
+                    zargs: List[str] = []
+                    for z in zones:
+                        if z.r[0] - start >= 0 and z.r[0] < end:
+                            s = z.r[0] - start
+                            e = z.r[1] - start
+                            e = e if e < end - start else end - start - 1
+                            zargs.append(f"{s},{e},b={z.b}")
+                    params.append("/".join(zargs))
+            elif p == "$QPFILE":
+                if qpfile:
+                    params += ["--qpfile", qpfile]
+            else:
+                params.append(p.format(frames=end-start, filename=filename, qpfile="qpfile.txt"))
 
         log.status("--- RUNNING ENCODE ---")
 
@@ -171,6 +195,7 @@ class SelfRunner():
     audio_file: str
     timecodes: List[float]
     timecode_file: Optional[str]
+    qpfile: Optional[str]
 
     encoder: Encoder
     audio: AudioGetter
@@ -180,11 +205,13 @@ class SelfRunner():
     def __init__(self, config: Config, source: FileSource, final_filter: Callable[[], vs.VideoNode],
                  workraw_filter: Optional[Callable[[], vs.VideoNode]] = None,
                  chapters: Optional[List[Chapter]] = None,
-                 editions: Optional[List[Edition]] = None) -> None:
+                 editions: Optional[List[Edition]] = None,
+                 zones: Optional[List[Zone]] = None) -> None:
         self.config = config
         self.src = source
         self.video_clean = False
         self.audio_clean = False
+        self.qpfile = None
 
         parser = argparse.ArgumentParser(description=f"Encode {self.config.title} {self.config.desc}")
         if workraw_filter:
@@ -207,8 +234,10 @@ class SelfRunner():
         self.workraw = args.workraw if workraw_filter else False
         self.profile = "workraw" if self.workraw else "final"
         self.profile = args.profile or self.profile
-        self.suffix = args.suffix if args.suffix is not None else "workraw" if self.workraw else "premux"
-        self.suffix = args.profile or self.suffix
+        self.suffix = args.suffix if args.suffix is not None \
+            else "workraw" if self.workraw \
+            else args.profile if args.profile \
+            else "premux"
 
         self.clip = workraw_filter() if workraw_filter and self.workraw else final_filter()
 
@@ -258,9 +287,9 @@ class SelfRunner():
             log.status("Comparison generated.")
             return
 
-        open("qpfile.txt", "w").close()  # guarantee qpfile is created/cleared as appropriate
         if (editions or chapters) and (start == 0 and end == self.clip.num_frames):
-            make_qpfile("qpfile.txt", chapters=chapters, editions=editions)
+            self.qpfile = "qpfile.txt"
+            make_qpfile(self.qpfile, chapters=chapters, editions=editions)
 
         settings_path = os.path.join(self.config.datapath, f"{self.profile}-settings")
         if not os.path.isfile(settings_path):
@@ -272,7 +301,7 @@ class SelfRunner():
             if self.clip.fps_den == 0 else None
         self.video_file, self.timecodes = self.encoder.encode(self.clip,
                                                               f"{self.config.desc}_{self.suffix}_{start}_{end}",
-                                                              start, end, self.timecode_file)
+                                                              start, end, zones, self.qpfile, self.timecode_file)
 
         # calculate timecodes if cfr and we didn't generate any (we shouldn'tve)
         self.timecodes = [round(float(1e9*f*(1/self.clip.fps)))/1e9 for f in range(0, self.clip.num_frames + 1)] \

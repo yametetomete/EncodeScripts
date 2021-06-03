@@ -112,6 +112,11 @@ def make_qpfile(qpfile: str,
                 chapters: Optional[List[Chapter]] = None,
                 editions: Optional[List[Edition]] = None) -> None:
     editions = _to_edition(chapters=chapters, editions=editions)
-    frames = set(c.frame for e in editions for c in e.chapters)
+    frames = set()
+    for e in editions:
+        for c in e.chapters:
+            frames.add(c.frame)
+            if c.end_frame and c.end_frame > 0:
+                frames.add(c.end_frame)
     with open(qpfile, "w", encoding="utf-8") as qp:
         qp.writelines([f"{f} I\n" for f in sorted(list(frames))])
