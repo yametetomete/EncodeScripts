@@ -9,7 +9,7 @@ import string
 import subprocess
 import tempfile
 
-from lvsfunc.render import clip_async_render
+from lvsfunc.render import clip_async_render, find_scene_changes
 
 from typing import Any, BinaryIO, Callable, List, NamedTuple, Optional, Sequence, Set, Tuple, cast
 
@@ -229,7 +229,16 @@ class SelfRunner():
                             Will search for the output file to include in comparison, if present.",
                             action="store_true")
         parser.add_argument("-a", "--audio-only", help="Only process audio, no video.", action="store_true")
+        parser.add_argument("--keyframes", nargs="?", default=None,
+                            help="Generate keyframes and exit", const="keyframes.txt")
         args = parser.parse_args()
+
+        if args.keyframes:
+            kf = find_scene_changes(source.source())
+            with open(args.keyframes, "w", encoding="utf-8") as kfo:
+                for f in kf:
+                    kfo.write(f"{f:d} I\n")
+            return
 
         self.workraw = args.workraw if workraw_filter else False
         self.profile = "workraw" if self.workraw else "final"
