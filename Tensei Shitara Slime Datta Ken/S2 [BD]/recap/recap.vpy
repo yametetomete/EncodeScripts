@@ -1,11 +1,11 @@
 import vapoursynth as vs
 
-from tensura_common import (TenSuraS2BDConfig, antialias, deband, denoise, descale,
+from tensura_common import (TenSuraS2Config, TenSuraS2BDSource, antialias, deband, denoise, descale,
                             edgefix, finalize, megurumono_scenefilter, regrain)
 
 from yt_common.automation import SelfRunner, Zone
 from yt_common.chapters import Chapter
-from yt_common.source import FileTrim, SimpleSource
+from yt_common.source import FileTrim
 
 from lvsfunc.mask import BoundingBox
 from lvsfunc.misc import replace_ranges
@@ -16,9 +16,9 @@ from typing import List, Tuple
 import os
 
 DESC: str = os.path.basename(os.path.splitext(__file__)[0])
-CONFIG: TenSuraS2BDConfig = TenSuraS2BDConfig(DESC)
+CONFIG: TenSuraS2Config = TenSuraS2Config(DESC)
 BDMV: str = "../bdmv/[BDMV][210326][Tensei Shitara Slime Datta Ken 2nd Season][Vol.1]/BDMV/STREAM"
-SOURCE: SimpleSource = SimpleSource(
+SOURCE: TenSuraS2BDSource = TenSuraS2BDSource(
     FileTrim(os.path.join(BDMV, "00013.m2ts"), (24, -24))
 )
 

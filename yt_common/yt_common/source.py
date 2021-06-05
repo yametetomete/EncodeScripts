@@ -12,6 +12,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any, List, NamedTuple, Optional, Tuple, Union
 
+from .audio import AudioStream, CodecPassthrough
 from .config import Config
 from .logging import log
 
@@ -73,6 +74,9 @@ class FileSource(ABC):
     @abstractmethod
     def audio_src(self) -> List[FileTrim]:
         pass
+
+    def audio_streams(self) -> List[AudioStream]:
+        return [AudioStream(0, CodecPassthrough())]  # default: passthrough first stream
 
     @abstractmethod
     def source(self) -> vs.VideoNode:
