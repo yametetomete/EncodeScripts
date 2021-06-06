@@ -10,7 +10,7 @@ import glob
 import os
 
 from abc import ABC, abstractmethod
-from typing import Any, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
 
 from .audio import AudioStream, CodecPassthrough
 from .config import Config
@@ -63,10 +63,18 @@ def glob_filename(pattern: str) -> str:
 
 
 class FileSource(ABC):
+    nodes: Dict[str, vs.VideoNode]
+
+    def __init__(self) -> None:
+        self.nodes = {}
+
     def _open(self, path: str) -> vs.VideoNode:
-        return depth(core.lsmas.LWLibavSource(path), 16) if path.lower().endswith(".m2ts") \
+        if path in self.nodes:
+            return self.nodes[path]
+        self.nodes[path] = depth(core.lsmas.LWLibavSource(path), 16) if path.lower().endswith(".m2ts") \
             else depth(core.d2v.Source(path), 16) if path.lower().endswith(".d2v") \
             else depth(core.ffms2.Source(path), 16)
+        return self.nodes[path]
 
     def audio_ref(self) -> Optional[vs.VideoNode]:
         return None
@@ -97,6 +105,7 @@ class SimpleSource(FileSource):
         self.sclip = None
         self.aref = aref
         self.asrc = asrc if isinstance(asrc, list) else [asrc] if asrc is not None else None
+        super().__init__()
 
     def audio_ref(self) -> Optional[vs.VideoNode]:
         return self.aref
@@ -116,6 +125,7 @@ class DehardsubFileFinder(FileSource):
 
     def __init__(self, config: Config) -> None:
         self.config = config
+        super().__init__()
 
     @abstractmethod
     def get_waka_filenames(self) -> List[str]:
