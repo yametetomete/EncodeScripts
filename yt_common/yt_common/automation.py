@@ -187,6 +187,7 @@ class SelfRunner():
             self.audio_file = out_name
 
     def _do_mux(self, name: str, chapters: bool = True) -> int:
+        streams = self.src.audio_streams()
         tcargs = ["--timecodes", f"0:{self.timecode_file}"] if self.timecode_file else []
         mkvtoolnix_args = [
             "mkvmerge",
@@ -195,10 +196,12 @@ class SelfRunner():
             "--default-track", "0:yes",
         ] + tcargs + [
             "(", self.video_file, ")",
-            "--no-chapters", "--no-track-tags", "--no-global-tags", "--track-name", "0:",
-            "--default-track", "0:yes", "--language", "0:jpn",
+            "--no-chapters", "--no-track-tags", "--no-global-tags",
+        ] + [y for i, s in enumerate(streams) for y in ("--track-name", f"{i:d}:{s.name}",
+                                                        "--default-track", f"{i:d}:yes" if i == 0 else f"{i:d}:no",
+                                                        "--language", f"{i:d}:{s.language}")] + [
             "(", self.audio_file, ")",
-            "--track-order", "0:0,0:1",
+            "--track-order", "0:0,"+",".join([f"1:{i:d}" for i in range(len(streams))])
         ]
         if chapters:
             chap = [f for f in [f"{self.config.desc}.xml", "chapters.xml"] if os.path.isfile(f)]
