@@ -72,6 +72,7 @@ class SelfRunner():
         if args.keyframes:
             kf = find_scene_changes(source.source())
             with open(args.keyframes, "w", encoding="utf-8") as kfo:
+                kfo.write("# WWXD log file, using qpfile format\n\n")
                 for f in kf:
                     kfo.write(f"{f:d} I\n")
             return
