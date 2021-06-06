@@ -1,8 +1,18 @@
+import acsuite
+import os
+
 from abc import ABC, abstractmethod
 from subprocess import call
-from typing import List, NamedTuple
+from typing import TYPE_CHECKING, List, Set, NamedTuple, Optional
 
+from .config import Config
 from .util import get_temp_filename
+
+if TYPE_CHECKING:
+    from .source import FileSource
+
+
+AUDIO_PFX: str = "_audio_temp_"
 
 
 class AudioEncoder(ABC):
@@ -63,3 +73,60 @@ class CodecFlac(FFAudio):
 class AudioStream(NamedTuple):
     stream_index: int  # zero-indexed, ignores video streams
     codec: AudioEncoder
+    name: str = ""
+    language: str = "jpn"
+
+
+class AudioTrimmer():
+    config: Config
+    src: "FileSource"
+    cleanup: Set[str]
+
+    def __init__(self, config: Config, src: "FileSource") -> None:
+        self.config = config
+        self.src = src
+        self.cleanup = set()
+
+    def trim_audio(self, ftrim: Optional[acsuite.types.Trim] = None) -> str:
+        streams = sorted(self.src.audio_streams(), key=lambda s: s.stream_index)
+        if len(streams) == 0:
+            return ""
+        trims = self.src.audio_src()
+        ffmpeg = acsuite.ffmpeg.FFmpegAudio()
+
+        tlist: List[str] = []
+        for t in trims:
+            audio_cut = acsuite.eztrim(t.path, t.trim or (0, None), ref_clip=self.src.audio_ref(),
+                                       outfile=get_temp_filename(prefix=AUDIO_PFX+"cut_", suffix=".mka"),
+                                       streams=[s.stream_index for s in streams])[0]
+            self.cleanup.add(audio_cut)
+            tlist.append(audio_cut)
+
+        if len(tlist) > 1:
+            audio_cut = ffmpeg.concat(*tlist)
+            self.cleanup.add(audio_cut)
+
+        if ftrim:
+            audio_cut = acsuite.eztrim(audio_cut, ftrim, ref_clip=self.src.source(),
+                                       outfile=get_temp_filename(prefix=AUDIO_PFX+"fcut_", suffix=".mka"))[0]
+            self.cleanup.add(audio_cut)
+
+        if len(streams) > 1:
+            splits = [get_temp_filename(prefix=AUDIO_PFX+"split_", suffix=".mka") for _ in range(0, len(streams))]
+            ffmpeg.split(audio_cut, splits)
+            self.cleanup |= set(splits)
+            encode = [streams[i].codec.encode_audio(f) for i, f in enumerate(splits)]
+            self.cleanup |= set(encode)
+            audio_cut = get_temp_filename(prefix=AUDIO_PFX+"join_", suffix=".mka")
+            ffmpeg.join(audio_cut, *encode)
+        else:
+            audio_cut = streams[0].codec.encode_audio(audio_cut)
+
+        self.cleanup.add(audio_cut)
+
+        return audio_cut
+
+    def do_cleanup(self) -> None:
+        for f in self.cleanup:
+            os.remove(f)
+        self.cleanup.clear()

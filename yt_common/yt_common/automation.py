@@ -1,196 +1,23 @@
 import vapoursynth as vs
 
-import acsuite
 import argparse
 import os
 import random
 import shutil
-import string
 import subprocess
 
-from lvsfunc.render import clip_async_render, find_scene_changes
+from lvsfunc.render import find_scene_changes
 
-from typing import Any, BinaryIO, Callable, List, NamedTuple, Optional, Sequence, Set, Tuple, cast
+from typing import Callable, List, Optional
 
+from .audio import AudioTrimmer
 from .chapters import Chapter, Edition, make_chapters, make_qpfile
 from .config import Config
 from .logging import log
-from .util import get_temp_filename
 from .source import FileSource
+from .video import VideoEncoder, Zone
 
 core = vs.core
-
-AUDIO_PFX: str = "_audiogetter_temp_"
-
-
-def bin_to_plat(binary: str) -> str:
-    if os.name == "nt":
-        return binary if binary.lower().endswith(".exe") else f"{binary}.exe"
-    else:
-        return binary if not binary.lower().endswith(".exe") else binary[:-len(".exe")]
-
-
-def forward_signal(signum: int, frame: Any, process: Any) -> None:
-    log.warn("Forwarding SIGINT")
-    process.send_signal(signum)
-
-
-class Zone(NamedTuple):
-    r: Tuple[int, int]
-    b: float
-
-
-class Encoder():
-    clip: vs.VideoNode
-
-    binary: str
-    params: Sequence[str]
-    force: bool
-
-    out_template: str
-
-    cleanup: List[str]
-
-    def __init__(self, settings_path: str, binary: Optional[str] = None, force: bool = False) -> None:
-        self.binary = binary if binary is not None else ""
-        self.force = force
-        self.cleanup = []
-
-        self._get_encoder_settings(settings_path)
-
-    def encode(self, clip: vs.VideoNode, filename: str, start: int = 0, end: int = 0,
-               zones: Optional[List[Zone]] = None, qpfile: Optional[str] = None,
-               timecode_file: Optional[str] = None, want_timecodes: bool = False) -> Tuple[str, List[float]]:
-        end = end if end != 0 else clip.num_frames
-        want_timecodes = True if timecode_file else want_timecodes
-
-        outfile = self.out_template.format(filename=filename)
-
-        if os.path.isfile(outfile) and not self.force:
-            log.warn("Existing output detected, skipping encode!")
-            return outfile, []
-
-        params: List[str] = []
-        for p in self.params:
-            if p == "$ZONES":
-                if zones:
-                    zones.sort(key=lambda z: z.r[0])
-                    params.append("--zones")
-                    zargs: List[str] = []
-                    for z in zones:
-                        if z.r[0] - start >= 0 and z.r[0] < end:
-                            s = z.r[0] - start
-                            e = z.r[1] - start
-                            e = e if e < end - start else end - start - 1
-                            zargs.append(f"{s},{e},b={z.b}")
-                    params.append("/".join(zargs))
-            elif p == "$QPFILE":
-                if qpfile:
-                    params += ["--qpfile", qpfile]
-            else:
-                params.append(p.format(frames=end-start, filename=filename, qpfile="qpfile.txt"))
-
-        log.status("--- RUNNING ENCODE ---")
-
-        print("+ " + " ".join([self.binary] + list(params)))
-
-        process = subprocess.Popen([self.binary] + list(params), stdin=subprocess.PIPE)
-
-        # i want the encoder to handle any ctrl-c so it exits properly
-        # forward_to_proc = functools.partial(forward_signal, process=process)
-        # signal.signal(signal.SIGINT, forward_to_proc)
-        # turns out this didn't work out the way i had hoped
-
-        # use the python renderer only if we need timecodes because it's slower
-        timecodes: List[float] = []
-        if want_timecodes:
-            timecode_io = open(timecode_file, "w") if timecode_file else None
-            timecodes = clip_async_render(clip[start:end], cast(BinaryIO, process.stdin), timecode_io)
-        else:
-            clip[start:end].output(cast(BinaryIO, process.stdin), y4m=True)
-        process.communicate()
-
-        # vapoursynth should handle this itself but just in case
-        if process.returncode != 0:
-            log.error("--- ENCODE FAILED ---")
-            raise BrokenPipeError(f"Pipe to {self.binary} broken")
-
-        log.success("--- ENCODE FINISHED ---")
-        self.cleanup.append(outfile)
-        return outfile, timecodes
-
-    def _get_encoder_settings(self, settings_path: str) -> None:
-        with open(settings_path, "r") as settings:
-            keys = " ".join([line.strip() for line in settings if not line.strip().startswith("#")]).split(" ")
-
-        # verify that the settings contain an output file template
-        outputs = [k for k in keys[1:] if any([name == "filename" for _, name, _, _ in string.Formatter().parse(k)])]
-        if not outputs or len(outputs) > 1:
-            raise Exception("Failed to find unambiguous output file for encoder!")
-        self.out_template = outputs[0]
-
-        self.binary = bin_to_plat(keys[0]) if not self.binary else self.binary
-        self.params = keys[1:]
-
-    def do_cleanup(self) -> None:
-        for f in self.cleanup:
-            os.remove(f)
-        self.cleanup = []
-
-
-class AudioGetter():
-    config: Config
-    src: FileSource
-    cleanup: Set[str]
-
-    def __init__(self, config: Config, src: FileSource) -> None:
-        self.config = config
-        self.src = src
-        self.cleanup = set()
-
-    def trim_audio(self, ftrim: Optional[acsuite.types.Trim] = None) -> str:
-        streams = sorted(self.src.audio_streams(), key=lambda s: s.stream_index)
-        if len(streams) == 0:
-            return ""
-        trims = self.src.audio_src()
-        ffmpeg = acsuite.ffmpeg.FFmpegAudio()
-
-        tlist: List[str] = []
-        for t in trims:
-            audio_cut = acsuite.eztrim(t.path, t.trim or (0, None), ref_clip=self.src.audio_ref(),
-                                       outfile=get_temp_filename(prefix=AUDIO_PFX+"cut_", suffix=".mka"),
-                                       streams=[s.stream_index for s in streams])[0]
-            self.cleanup.add(audio_cut)
-            tlist.append(audio_cut)
-
-        if len(tlist) > 1:
-            audio_cut = ffmpeg.concat(*tlist)
-            self.cleanup.add(audio_cut)
-
-        if ftrim:
-            audio_cut = acsuite.eztrim(audio_cut, ftrim, ref_clip=self.src.source(),
-                                       outfile=get_temp_filename(prefix=AUDIO_PFX+"fcut_", suffix=".mka"))[0]
-            self.cleanup.add(audio_cut)
-
-        if len(streams) > 1:
-            splits = [get_temp_filename(prefix=AUDIO_PFX+"split_", suffix=".mka") for _ in range(0, len(streams))]
-            ffmpeg.split(audio_cut, splits)
-            self.cleanup |= set(splits)
-            encode = [streams[i].codec.encode_audio(f) for i, f in enumerate(splits)]
-            self.cleanup |= set(encode)
-            audio_cut = get_temp_filename(prefix=AUDIO_PFX+"join_", suffix=".mka")
-            ffmpeg.join(audio_cut, *encode)
-        else:
-            audio_cut = streams[0].codec.encode_audio(audio_cut)
-
-        self.cleanup.add(audio_cut)
-
-        return audio_cut
-
-    def do_cleanup(self) -> None:
-        for f in self.cleanup:
-            os.remove(f)
-        self.cleanup.clear()
 
 
 class SelfRunner():
@@ -206,8 +33,8 @@ class SelfRunner():
     timecode_file: Optional[str]
     qpfile: Optional[str]
 
-    encoder: Encoder
-    audio: AudioGetter
+    encoder: VideoEncoder
+    audio: AudioTrimmer
 
     profile: str
 
@@ -313,7 +140,7 @@ class SelfRunner():
         if not os.path.isfile(settings_path):
             raise FileNotFoundError(f"Failed to find {settings_path}!")
 
-        self.encoder = Encoder(settings_path, args.encoder, args.force)
+        self.encoder = VideoEncoder(settings_path, args.encoder, args.force)
         # we only want to generate timecodes if vfr, otherwise we can just calculate them
         self.timecode_file = f"{self.config.desc}_{self.suffix}_{start}_{end}_timecodes.txt" \
             if self.clip.fps_den == 0 else None
@@ -351,7 +178,7 @@ class SelfRunner():
 
     def _do_audio(self, start: int, end: int, out_name: Optional[str] = None) -> None:
         log.status("--- LOOKING FOR AUDIO ---")
-        self.audio = AudioGetter(self.config, self.src)
+        self.audio = AudioTrimmer(self.config, self.src)
 
         log.status("--- TRIMMING AUDIO ---")
         self.audio_file = self.audio.trim_audio((start, end))

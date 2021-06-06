@@ -6,6 +6,7 @@ from tensura_common import (TenSuraS2Config, TenSuraS2BDSource, antialias, deban
 from yt_common.automation import SelfRunner
 from yt_common.chapters import Chapter, Edition
 from yt_common.source import FileTrim
+from yt_common.video import Zone
 
 from lvsfunc.mask import BoundingBox
 from lvsfunc.misc import replace_ranges
