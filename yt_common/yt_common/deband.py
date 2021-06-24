@@ -4,6 +4,8 @@ from enum import Enum
 from functools import partial
 from typing import Any, Callable, List, Optional, Tuple, Union
 
+from lvsfunc.util import scale_thresh
+
 import vsutil
 
 
@@ -93,3 +95,28 @@ def morpho_mask(clip: vs.VideoNode) -> Tuple[vs.VideoNode, vs.VideoNode]:
     grad_mask = core.std.Expr([ymph, yrangesml, ypw], expr="x y z max max")
 
     return grad_mask, yrangebig
+
+
+def color_mask(clip: vs.VideoNode, y: Tuple[float, float], u: Tuple[float, float], v: Tuple[float, float]
+               ) -> vs.VideoNode:
+    expr = f"x {scale_thresh(y[0], clip)} >= x {scale_thresh(y[1], clip)} <= and "  # Y bounds check
+    expr += f"y {scale_thresh(u[0], clip)} >= y {scale_thresh(u[1], clip)} <= and and "  # U bounds check
+    expr += f"z {scale_thresh(v[0], clip)} >= z {scale_thresh(v[1], clip)} <= and and "  # V bounds check
+    expr += f"{scale_thresh(1.0, clip)} 0 ?"  # brz
+    wmask = core.std.Expr(vsutil.split(clip.resize.Bicubic(format=vs.YUV444P16)), expr)
+    wmask = wmask.std.Inflate().std.Binarize()
+    wmask_edge = wmask.std.Prewitt().std.Binarize()
+    wmask = core.std.Expr([wmask, wmask_edge], "x y -")  # preserve edges for sharpness
+    return wmask
+
+
+def gray_mask(clip: vs.VideoNode, y: Tuple[float, float], cthr: float = 0.02) -> vs.VideoNode:
+    expr = f"x {scale_thresh(y[0], clip)} >= x {scale_thresh(y[1], clip)} <= and "  # Y bounds check
+    expr += "y z >= and "  # U >= V for blue-ish grays
+    expr += f"y z - abs {scale_thresh(cthr, clip)} <= and "  # UV proximity check
+    expr += f"{scale_thresh(1.0, clip)} 0 ?"  # brz
+    wmask = core.std.Expr(vsutil.split(clip.resize.Bicubic(format=vs.YUV444P16)), expr)
+    wmask = wmask.std.Inflate().std.Binarize()
+    wmask_edge = wmask.std.Prewitt().std.Binarize()
+    wmask = core.std.Expr([wmask, wmask_edge], "x y -")  # preserve edges for sharpness
+    return wmask
