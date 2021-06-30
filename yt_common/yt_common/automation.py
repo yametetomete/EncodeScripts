@@ -67,11 +67,10 @@ class SelfRunner():
         parser.add_argument("-a", "--audio-only", help="Only process audio, no video.", action="store_true")
         parser.add_argument("--keyframes", nargs="?", default=None,
                             help="Generate keyframes and exit.", const="keyframes.txt")
-        parser.add_argument("--scxvid", help="Use scxvid for keyframes.", action="store_true")
         args = parser.parse_args()
 
         if args.keyframes:
-            kf = find_scene_changes(source.source(), args.scxvid)
+            kf = find_scene_changes(source.source())
             with open(args.keyframes, "w", encoding="utf-8") as kfo:
                 kfo.write("# WWXD log file, using qpfile format\n\n")
                 for f in kf:
