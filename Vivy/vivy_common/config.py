@@ -1,9 +1,9 @@
 import vapoursynth as vs
 
-from yt_common import source
+from yt_common.audio import AudioStream, CodecOpus
 from yt_common.config import Config
 from yt_common.logging import log
-from yt_common.source import AMAZON_FILENAME_VBR
+from yt_common.source import AMAZON_FILENAME_VBR, FunimationSource, SimpleSource
 
 import os
 
@@ -34,7 +34,7 @@ class VivyConfig(Config):
         )
 
 
-class VivySource(source.FunimationSource):
+class VivySource(FunimationSource):
     def get_amazon(self) -> vs.VideoNode:
         # ep1-3 have good funi video, let's just use that
         if int(self.config.desc) < 4:
@@ -51,3 +51,8 @@ class VivySource(source.FunimationSource):
             WAKA_FR_FILENAME,
             WAKA_DE_FILENAME,
         ]]
+
+
+class VivyBDSource(SimpleSource):
+    def audio_streams(self) -> List[AudioStream]:
+        return [AudioStream(0, CodecOpus())]
