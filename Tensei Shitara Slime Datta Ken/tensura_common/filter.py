@@ -11,6 +11,7 @@ from lvsfunc.misc import replace_ranges, scale_thresh
 from lvsfunc.scale import descale as ldescale
 from lvsfunc.types import Range
 
+from G41Fun import MaskedDHA
 from awsmfunc import bbmod
 from debandshit import f3kbilateral
 from kagefunc import retinex_edgemask
@@ -90,6 +91,11 @@ def antialias(clip: vs.VideoNode, strong: Optional[List[Range]] = None,
                 mask = core.std.Expr([mask, m.get_mask(clip)], "x y max")
             clamp = replace_ranges(clamp, core.std.MaskedMerge(clamp, sn, mask), r)
     return clamp
+
+
+def dehalo(clip: vs.VideoNode) -> vs.VideoNode:
+    dh: vs.VideoNode = MaskedDHA(clip, rx=1.2, ry=1.2, darkstr=0, brightstr=0.7)
+    return dh
 
 
 def regrain(clip: vs.VideoNode) -> vs.VideoNode:
