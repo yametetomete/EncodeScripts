@@ -1,0 +1,2 @@
+# these don't have to make sense
+x264 - --demuxer y4m --input-depth 10 --output-depth 10 --colormatrix bt709 --colorprim bt709 --transfer bt709 --preset fast --crf 16 --aq-mode 3 --aq-strength 0.85 --qcomp 0.70 --psy-rd 0.85:0.0 --deblock -1:-1 --frames {frames:d} --output {filename:s}.h264
