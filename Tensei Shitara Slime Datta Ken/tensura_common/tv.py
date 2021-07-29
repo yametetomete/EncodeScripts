@@ -8,11 +8,23 @@ from vardefunc.deband import dumb3kdb
 
 from vsutil import depth
 
+from typing import Any, Dict
+
 core = vs.core
 
 
+def _nnedi3_rescale(clip: vs.VideoNode, width: int, height: int) -> vs.VideoNode:
+    nnargs: Dict[str, Any] = dict(field=0, dh=True, nsize=4, nns=4, qual=2, pscrn=2)
+    nn = clip.resize.Point(1440, 810, format=vs.GRAY16).std.Transpose() \
+        .nnedi3.nnedi3(**nnargs) \
+        .std.Transpose() \
+        .nnedi3.nnedi3(**nnargs)
+    return nn.resize.Bicubic(width, height, filter_param_a=0, filter_param_b=1/2,
+                             src_top=0.5, src_left=0.5, format=vs.GRAYS)
+
+
 def cr_prefilter(clip: vs.VideoNode) -> vs.VideoNode:
-    rescaled = depth(descale(clip, height=810, kernel=Bicubic(b=0, c=1/2)), 16)
+    rescaled = depth(descale(clip, height=810, kernel=Bicubic(b=0, c=1/2), upscaler=_nnedi3_rescale), 16)
     return rescaled
 
 
